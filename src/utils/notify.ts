@@ -9,11 +9,12 @@ export function sysNotify(title = '', bodyMsg = '', clickMsg = '') {
     .onclick = () => { document.getElementById('output')!.innerText = CLICK_MESSAGE }
 }
 
-export function appNotify(title = '', bodyMsg = '') {
+export function appNotify(title = '', bodyMsg = '', duration = 3000) {
   ElNotification({
     title: title,
     message: bodyMsg,
     position: 'bottom-right',
+    duration: duration || 3000,
   })
 
 }

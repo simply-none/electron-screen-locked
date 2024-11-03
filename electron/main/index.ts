@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ElectronStore from 'electron-store'
+import { readFileList, readJsonFileContent } from './utils/common'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -24,6 +25,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 let timer = null
 let tray = null
+let poetDataPathList = null
 const icon = path.join(process.env.VITE_PUBLIC, 'logo.png')
   
 
@@ -97,6 +99,13 @@ async function createWindow() {
   ipcMain.on("max", (e, fullScreen: boolean) => {
     win!.setFullScreen(fullScreen);
     e.returnValue = fullScreen;
+  });
+  ipcMain.on("poet-data", (e, fullScreen: boolean) => {
+    // 获取诗词数据，用于首页展示
+    poetDataPathList = readFileList(path.join(process.env.VITE_PUBLIC, '/宋词/'), ['.json'])
+    let randomFile = poetDataPathList[Math.floor(Math.random() * poetDataPathList.length)]
+    let randomPoetData = readJsonFileContent(randomFile)
+    e.returnValue = randomPoetData;
   });
   ipcMain.on("start-work", (e, workTimeGap: number) => {
     hideApp()

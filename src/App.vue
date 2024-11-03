@@ -1,9 +1,19 @@
 <script setup lang="ts">
-import { watch } from 'vue';
+import { watch, onMounted } from 'vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import electronConfig from '../electron-builder.json5'
 import useSetting from './hooks/useSetting';
+import useWorkOrReset from './hooks/useWorkOrReset';
+const {
+  nextRestTime,
+  nextWorkTime,
+  curStatus,
+  startApp
+} = useWorkOrReset();
 
+onMounted(() => {
+  startApp();
+});
 const { appBgColor, appInnerColor } = useSetting();
 
 watch(appInnerColor, (n, o) => {
