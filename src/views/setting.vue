@@ -97,6 +97,9 @@
       <el-form-item label="清空系统数据">
         <el-button type="primary" @click="clearStore">清空数据</el-button>
       </el-form-item>
+      <el-form-item label="开机自启动">
+        <el-switch v-model="isStartup" inline-prompt active-text="是" inactive-text="否" @change="changeIsStartup"/>
+      </el-form-item>
       <el-form-item label="退出应用">
         <el-button type="primary" @click="quitApp">点击退出应用</el-button>
       </el-form-item>
@@ -131,7 +134,7 @@ const {
   nextRestTime,
   nextWorkTime,
 } = useWorkOrReset();
-const { forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor } = useSetting();
+const { isStartup, forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor, setIsStartup } = useSetting();
 
 const router = useRouter();
 
@@ -147,6 +150,10 @@ function changeForceWorkTimes(value: number) {
 
 function changeAppBgColor(value: string) {
   setAppBgColor(value);
+}
+
+function changeIsStartup(value: boolean) {
+  setIsStartup(value);
 }
 
 function changeAppInnerColor(value: string) {

@@ -27,7 +27,7 @@ let timer = null
 let tray = null
 let poetDataPathList = null
 const icon = path.join(process.env.VITE_PUBLIC, 'logo.png')
-  
+
 
 export function focusAppToTop() {
   win?.setAlwaysOnTop(true, "screen-saver")
@@ -100,6 +100,13 @@ async function createWindow() {
     win!.setFullScreen(fullScreen);
     e.returnValue = fullScreen;
   });
+  ipcMain.on("set-startup", (e, isStartup: boolean) => {
+    app.setLoginItemSettings({
+      openAtLogin: isStartup,
+      // 如果应用以管理员身份运行，设置此选项为true可避免UAC（用户账户控制）对话框在Windows上弹出。
+      openAsHidden: false, // macOS特有的，当设置为true时，应用会隐藏式启动
+    })
+  });
   ipcMain.on("poet-data", (e, fullScreen: boolean) => {
     // 获取诗词数据，用于首页展示
     poetDataPathList = readFileList(path.join(process.env.VITE_PUBLIC, '/宋词/'), ['.json'])
@@ -151,7 +158,7 @@ async function createWindow() {
     // 这里仅仅打开应用界面，不调用 focusAppToTop()，不然屏幕无法点击
     win.show()
   })
-  
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:')) shell.openExternal(url)
     return { action: 'deny' }

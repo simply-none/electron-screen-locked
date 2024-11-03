@@ -1,6 +1,6 @@
 {
   "name": "electron-screen-locked",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "main": "dist-electron/main/index.js",
   "description": "工作时强制休息，保护眼睛，守护健康！",
   "author": "JadeQiu <xxx@xxx.com>",
