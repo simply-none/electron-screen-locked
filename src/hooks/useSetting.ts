@@ -17,8 +17,8 @@ export default function useSetting() {
   // 引用设置
   const forceWorkTimes = ref(window.ipcRenderer.sendSync('get-store', 'forceWorkTimes'))
   const todayForceWorkTimes = ref(window.ipcRenderer.sendSync('get-store', 'todayForceWorkTimes'))
-  const appInnerColor = ref(window.ipcRenderer.sendSync('get-store', 'appInnerColor'))
-  const appBgColor = ref(window.ipcRenderer.sendSync('get-store', 'appBgColor'))
+  const appInnerColor = ref(window.ipcRenderer.sendSync('get-store', 'appInnerColor') || '#ffffff')
+  const appBgColor = ref(window.ipcRenderer.sendSync('get-store', 'appBgColor') || '#d4d4d4')
 
   function setForceWorkTimes(value: number) {
     forceWorkTimes.value = value

@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import { watch } from 'vue';
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import electronConfig from '../electron-builder.json5'
 import useSetting from './hooks/useSetting';
 
 const { appBgColor, appInnerColor } = useSetting();
+
+watch(appInnerColor, (n, o) => {
+  console.log('appInnerColor', n, o);
+});
+
+document.title = electronConfig.productName;
 
 </script>
 
