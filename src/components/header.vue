@@ -23,6 +23,6 @@ const props = defineProps({
 const emit = defineEmits(['back'])
 
 function back () {
-  history.back()
+  emit('back')
 }
 </script>

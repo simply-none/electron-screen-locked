@@ -1,93 +1,202 @@
 <template>
-  <div>
-    <div class="item">
-      <div class="label">
-        下次工作时间
+  <div class="home">
+    <div class="content-show" v-if="showContent && !showContent.error">
+      <div class="content-inner" v-if="showContent.author">
+        <div class="rhythmic">{{ showContent.rhythmic }}</div>
+        <div class="author">{{ showContent.author }}</div>
+        <div class="content">
+          <div v-for="paragraphs in showContent.paragraphs" :key="paragraphs">
+            {{ paragraphs }}
+          </div>
+        </div>
       </div>
-      <div class="value">
-        {{ nextWorkTime }}
+      <div class="content-inner" v-if="showContent.name">
+        <div class="author">{{ showContent.name }}</div>
+        <div class="content">
+          <div>
+            {{ showContent.description }}
+          </div>
+        </div>
+      </div>
+      <div class="content-toggle">
+        <el-button type="primary" @click="toNext">下一个</el-button>
       </div>
     </div>
-    <div class="setting">
+    <div class="cur-status">
+      <div class="item">
+        <div class="label">
+          当前状态
+        </div>
+        <div class="value">
+          {{ curStatus.label }}
+        </div>
+      </div>
+      <div class="item" v-if="curStatus.value === 'rest'">
+        <div class="label">
+          下次工作时间
+        </div>
+        <div class="value">
+          {{ nextWorkTime }}
+        </div>
+        <div class="value">
+          倒计时：{{ toNextWorkTime }}
+        </div>
+      </div>
+      <div class="item" v-else-if="curStatus.value === 'work'">
+        <div class="label">
+          下次休息时间
+        </div>
+        <div class="value">
+          {{ nextRestTime }}
+        </div>
+        <div class="value">
+          倒计时：{{ toNextRestTime }}
+        </div>
+      </div>
+    </div>
 
-      <el-image :src="SettingSvg" @click="toSetting"></el-image>
-    </div>
+
+  </div>
+  <div class="setting">
+    <el-image :src="SettingSvg" @click="toSetting"></el-image>
   </div>
 </template>
 
 <script setup>
 import SettingSvg from '../assets/set.svg'
-import { ref, reactive, watch, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import HeaderNav from '../components/header.vue';
+import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import useWorkOrReset from '../hooks/useWorkOrReset';
-import useClearStore from '../hooks/useClearStore';
-import useSetting from '../hooks/useSetting';
-import { timeUnit } from '../utils/time';
+
+const showContent = ref({ error: true });
+const timer = ref(null);
+const toNextWorkTime = ref('00:00:00');
+const toNextRestTime = ref('00:00:00');
+
 
 onMounted(() => {
-
-  console.log('进入首页');
-  startApp();
+  toNext();
+  timer.value = setInterval(() => {
+    if (curStatus.value.value === 'work') {
+      console.log(countDown(nextRestTime.value), 'countDown', nextRestTime.value)
+      toNextRestTime.value = countDown(nextRestTime.value);
+    } else if (curStatus.value.value === 'rest') {
+      console.log(countDown(nextWorkTime.value), 'countDown', nextWorkTime.value)
+      toNextWorkTime.value = countDown(nextWorkTime.value);
+    }
+  }, 1000);
 });
 
-const router = useRouter();
-const { startApp } = useWorkOrReset();
+onUnmounted(() => {
+  clearInterval(timer.value);
+});
 
-const { clearStore } = useClearStore();
+function toNext() {
+  const poetData = window.ipcRenderer.sendSync('poet-data')
+  showContent.value = poetData || { error: true }
+  console.log('poetData', poetData);
+}
+
+const router = useRouter();
+
 const {
-  workTimeGap,
-  restTimeGap,
-  workTimeGapUnit,
-  restTimeGapUnit,
-  startWorkTime,
-  closeWorkTime,
-  startWorkFn,
-  startRestFn,
-  changeEffectFn,
-  forceWorkWithTimes,
+  nextRestTime,
+  nextWorkTime,
+  curStatus,
 } = useWorkOrReset();
-const { forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor } = useSetting();
+
+// 写一个倒计时函数，用来计算当前时间距离下次工作时间的时间差，格式是00:00:00
+function countDown(time) {
+  const now = (new Date()).getTime();
+  const diff = (new Date(time)).getTime() - now;
+  let h = Math.floor(diff / 1000 / 60 / 60);
+  let m = Math.floor((diff / 1000 / 60) % 60);
+  let s = Math.floor((diff / 1000) % 60);
+  return `${h < 10 ? '0' + h : h}:${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+}
 
 function toSetting() {
   router.push('/setting');
 }
-
-const nextWorkTime = computed(() => {
-  let next = 0
-  if (startWorkTime.value >= closeWorkTime.value) {
-    // 当前正在工作
-    next = Number(startWorkTime.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-  } else {
-    // 当前正在休息
-    next = Number(closeWorkTime.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-  }
-  return new Date(Number(next)).toLocaleString('zh', {
-    hour12: false,
-  })
-})
-
-
-
 </script>
 
 <style lang="scss" scoped>
-.item {
-  display: flex;
-  align-items: center;
-  flex-direction: column;
-  width: 100%;
+.home {
   height: 100%;
+  display: flex;
+  flex-direction: column;
   justify-content: center;
-  .label {
-    font-size: 24px;
-    color: gray;
-  }
-  .value {
-    font-size: 28px;
-    font-weight: 900;
+  color: #696969;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-height: 160px;
+  padding: 12px 24px;
+
+}
+
+.content-show {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.content-toggle {
+  text-align: center;
+  margin: 20px;
+
+  .el-button {
+    backdrop-filter: blur(6px);
+    color: #696969;
+    background: #d9d9d9;
+    border-color: #cfcfcf;
   }
 }
+
+.content-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 50%;
+  max-width: 600px;
+  backdrop-filter: blur(6px);
+  overflow: auto;
+
+  /*隐藏垂直滚动条*/
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+}
+
+.cur-status {
+  display: flex;
+  justify-content: space-around;
+
+  .item {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    justify-content: center;
+    backdrop-filter: blur(6px);
+    padding: 12px 24px;
+
+    .label {
+      font-size: 24px;
+      color: gray;
+    }
+
+    .value {
+      font-size: 28px;
+      font-weight: 900;
+      color: #696969;
+    }
+  }
+}
+
 
 .el-image {
   position: fixed;

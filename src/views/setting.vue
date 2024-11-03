@@ -1,6 +1,6 @@
 <template>
   <div class="header">
-    <header-nav title="设置"></header-nav>
+    <header-nav title="设置" @back="toHome"></header-nav>
     <el-form class="setting-form" label-width="108" label-position="left" :style="{
       backgroundColor: appInnerColor,
     }">
@@ -10,8 +10,8 @@
         </template>
       </el-form-item>
       <el-form-item label="当前状态">
-        <div :class="['cur-status', curStatus === '正在休息' ? 'cur-status-rest' : 'cur-status-work']">
-          {{ curStatus }}
+        <div :class="['cur-status', curStatus.value === 'rest' ? 'cur-status-rest' : 'cur-status-work']">
+          {{ curStatus.label }}
         </div>
       </el-form-item>
       <el-form-item label="下次工作时间">
@@ -127,48 +127,13 @@ const {
   startRestFn,
   changeEffectFn,
   forceWorkWithTimes,
+  curStatus,
+  nextRestTime,
+  nextWorkTime,
 } = useWorkOrReset();
 const { forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor } = useSetting();
 
 const router = useRouter();
-
-const curStatus = computed(() => {
-  if (startWorkTime.value >= closeWorkTime.value) {
-    return '正在工作';
-  } else {
-    return '正在休息';
-  }
-})
-
-const nextWorkTime = computed(() => {
-  let next = 0
-  if (startWorkTime.value >= closeWorkTime.value) {
-    // 当前正在工作
-    next = Number(startWorkTime.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-  } else {
-    // 当前正在休息
-    next = Number(closeWorkTime.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-  }
-  return new Date(Number(next)).toLocaleString('zh', {
-    hour12: false,
-  })
-})
-
-const nextRestTime = computed(() => {
-  let next = 0
-  if (startWorkTime.value >= closeWorkTime.value) {
-    // 当前正在工作
-    next = Number(startWorkTime.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value)
-  } else {
-    // 当前正在休息
-    next = Number(closeWorkTime.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value)
-  }
-  return new Date(Number(next)).toLocaleString('zh', {
-    hour12: false,
-  })
-
-
-})
 
 function quitApp() {
   confirmDialog.open('确定要退出应用吗？', () => {
@@ -190,14 +155,17 @@ function changeAppInnerColor(value: string) {
 
 
 function toHome() {
-  router.push('/');
+  router.push({
+    path: '/',
+    query: {
+      from: 'setting',
+    },
+  });
 }
 
 </script>
 
 <style scoped lang="scss">
-.header {}
-
 .setting-title {
   padding-left: 3px;
   border-bottom: 6px solid #6d6d6d;
