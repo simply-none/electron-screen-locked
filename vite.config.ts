@@ -3,6 +3,7 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
 import pkg from './package.json'
+import { jsonX } from 'vite-plugin-jsonx';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -18,6 +19,7 @@ export default defineConfig(({ command }) => {
     },
     plugins: [
       vue(),
+      jsonX(),
       electron({
         main: {
           // Shortcut of `build.lib.entry`

@@ -97,6 +97,9 @@
       <el-form-item label="清空系统数据">
         <el-button type="primary" @click="clearStore">清空数据</el-button>
       </el-form-item>
+      <el-form-item label="退出应用">
+        <el-button type="primary" @click="quitApp">点击退出应用</el-button>
+      </el-form-item>
     </el-form>
 
   </div>
@@ -110,6 +113,7 @@ import useWorkOrReset from '../hooks/useWorkOrReset';
 import useClearStore from '../hooks/useClearStore';
 import useSetting from '../hooks/useSetting';
 import { timeUnit } from '../utils/time';
+import confirmDialog from '../utils/confirmDialog';
 
 const { clearStore } = useClearStore();
 const {
@@ -165,6 +169,12 @@ const nextRestTime = computed(() => {
 
 
 })
+
+function quitApp() {
+  confirmDialog.open('确定要退出应用吗？', () => {
+    window.ipcRenderer.send('quit-app');
+  });
+}
 
 function changeForceWorkTimes(value: number) {
   setForceWorkTimes(Number(value));

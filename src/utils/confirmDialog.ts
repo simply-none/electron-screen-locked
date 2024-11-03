@@ -1,6 +1,6 @@
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-const open = (msg: string, confirmFn: () => void, cancelFn: () => void) => {
+const open = (msg: string, confirmFn?: () => void, cancelFn?: () => void) => {
   ElMessageBox.confirm(
     msg,
     {
@@ -10,10 +10,10 @@ const open = (msg: string, confirmFn: () => void, cancelFn: () => void) => {
     }
   )
     .then(() => {
-      confirmFn()
+      confirmFn && confirmFn()
     })
     .catch(() => {
-      cancelFn()
+      cancelFn && cancelFn()
     })
 }
 
