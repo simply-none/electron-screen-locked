@@ -1,9 +1,9 @@
 {
-  "name": "electron-vue-vite",
-  "version": "28.1.0",
+  "name": "electron-screen-locked",
+  "version": "1.0.0-alpha.1",
   "main": "dist-electron/main/index.js",
-  "description": "Really simple Electron + Vue + Vite boilerplate.",
-  "author": "草鞋没号 <308487730@qq.com>",
+  "description": "工作时强制休息，保护眼睛，守护健康！",
+  "author": "JadeQiu <xxx@xxx.com>",
   "license": "MIT",
   "private": true,
   "keywords": [
@@ -11,7 +11,8 @@
     "rollup",
     "vite",
     "vue3",
-    "vue"
+    "vue",
+    "健康"
   ],
   "debug": {
     "env": {
