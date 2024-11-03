@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import zhCn from 'element-plus/dist/locale/zh-cn.mjs'
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import useSetting from './hooks/useSetting';
 
 const { appBgColor, appInnerColor } = useSetting();
