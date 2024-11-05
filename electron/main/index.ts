@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, dialog, globalShortcut, Tray, nativeImage, crashReporter } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, dialog, globalShortcut, Tray, Menu, nativeImage, crashReporter } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -101,6 +101,21 @@ async function createWindow() {
     e.returnValue = fullScreen;
   });
   ipcMain.on("set-startup", (e, isStartup: boolean) => {
+    //注意：非开发环境
+    if (!VITE_DEV_SERVER_URL) {
+      if (process.platform === "darwin") {
+        app.setLoginItemSettings({
+          openAtLogin: isStartup,//是否开机启动
+          openAsHidden: false//是否隐藏主窗体，保留托盘位置
+        });
+      } else {
+        app.setLoginItemSettings({
+          openAtLogin: isStartup,
+          openAsHidden: false,
+        });
+      }
+    }
+
     app.setLoginItemSettings({
       openAtLogin: isStartup,
       // 如果应用以管理员身份运行，设置此选项为true可避免UAC（用户账户控制）对话框在Windows上弹出。
@@ -113,6 +128,9 @@ async function createWindow() {
     let randomFile = poetDataPathList[Math.floor(Math.random() * poetDataPathList.length)]
     let randomPoetData = readJsonFileContent(randomFile)
     e.returnValue = randomPoetData;
+  });
+  ipcMain.on("hide-app", (e) => {
+    hideApp()
   });
   ipcMain.on("start-work", (e, workTimeGap: number) => {
     hideApp()
@@ -153,8 +171,25 @@ async function createWindow() {
   tray = new Tray(icon)
   tray.setToolTip('Electron-setToolTip')
   tray.setTitle('Electron-setTitle')
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '隐藏应用', click: () => {
+        if (win) {
+          hideApp()
+        }
+      }
+    },
+    {
+      label: '打开应用', click: () => {
+        if (win) {
+          focusAppToTop()
+        }
+      }
+    },
+  ])
+  tray.setContextMenu(contextMenu)
 
-  tray.on('click', () => {
+  tray.on('double-click', () => {
     // 这里仅仅打开应用界面，不调用 focusAppToTop()，不然屏幕无法点击
     win.show()
   })
