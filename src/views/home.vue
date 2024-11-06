@@ -109,6 +109,7 @@ const {
 function countDown(time) {
   const now = (new Date()).getTime();
   const diff = (new Date(time)).getTime() - now;
+  if (diff < 0) return '00:00:00';
   let h = Math.floor(diff / 1000 / 60 / 60);
   let m = Math.floor((diff / 1000 / 60) % 60);
   let s = Math.floor((diff / 1000) % 60);
