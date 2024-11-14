@@ -1,9 +1,24 @@
 import { ref } from "vue"
+import moment from 'moment'
 
 export default function useSetting() {
   // 强制解锁屏幕限制（即可以玩电脑）
   const storeForceWorkTimes = window.ipcRenderer.sendSync('get-store', 'forceWorkTimes') || 0
-  const storeTodayForceWorkTimes = window.ipcRenderer.sendSync('get-store', 'todayForceWorkTimes') || 0
+  let storeTodayForceWorkTimes = window.ipcRenderer.sendSync('get-store', 'todayForceWorkTimes')
+  if (typeof storeTodayForceWorkTimes !== 'object') {
+    storeTodayForceWorkTimes = {
+      today: moment().format('YYYY/MM/DD'),
+      times: storeTodayForceWorkTimes || 0,
+    }
+  } else {
+    const today = moment().format('YYYY/MM/DD')
+    if (storeTodayForceWorkTimes.today !== today) {
+      storeTodayForceWorkTimes = {
+        today: moment().format('YYYY/MM/DD'),
+        times: storeForceWorkTimes || 0,
+      }
+    }
+  }
   // 其他设置
   const storeAppInnerColor = window.ipcRenderer.sendSync('get-store', 'appInnerColor') || '#ffffff'
   const storeAppBgColor = window.ipcRenderer.sendSync('get-store', 'appBgColor') || '#d4d4d4'
@@ -30,8 +45,12 @@ export default function useSetting() {
   }
 
   function setTodayForceWorkTimes (value: number) {
-    todayForceWorkTimes.value = value
-    window.ipcRenderer.sendSync('set-store', 'todayForceWorkTimes', value)
+    const t = {
+      today: moment().format('YYYY/MM/DD'),
+      times: value
+    }
+    todayForceWorkTimes.value = t
+    window.ipcRenderer.sendSync('set-store', 'todayForceWorkTimes', t)
   }
 
   function setAppInnerColor (value: string) {
