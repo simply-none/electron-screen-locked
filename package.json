@@ -30,7 +30,7 @@
     "@originjs/vite-plugin-commonjs": "^1.0.3",
     "@vitejs/plugin-vue": "^5.0.4",
     "electron": "^33.0.2",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "^25.1.8",
     "electron-store": "^10.0.0",
     "element-plus": "^2.8.6",
     "moment": "^2.30.1",
