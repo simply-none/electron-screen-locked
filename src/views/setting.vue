@@ -62,7 +62,7 @@
       </el-form-item>
       <el-form-item label="立刻强制工作">
         <el-button type="primary" @click="() => forceWorkWithTimes()">强制开始工作</el-button>
-        <span style="margin-left: 1em;">今日剩余 {{ forceWorkTimes - todayForceWorkTimes }} 次</span>
+        <span style="margin-left: 1em;">今日剩余 {{ forceWorkTimes - todayForceWorkTimes?.times }} 次</span>
       </el-form-item>
 
       <!-- 分割线 -->

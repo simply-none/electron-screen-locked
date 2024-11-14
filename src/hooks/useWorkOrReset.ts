@@ -2,6 +2,7 @@ import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { sysNotify, appNotify } from '../utils/notify'
 
 import useSetting from './useSetting';
+import moment from 'moment';
 
 export default function useWorkOrRest() {
   const { forceWorkTimes, todayForceWorkTimes, setForceWorkTimes, setTodayForceWorkTimes } = useSetting();
@@ -213,7 +214,7 @@ export default function useWorkOrRest() {
   }
 
   function forceWorkWithTimes() {
-    if (todayForceWorkTimes.value > forceWorkTimes.value) {
+    if (todayForceWorkTimes.value?.times > forceWorkTimes.value) {
       appNotify('提示', '太累了，您不能再继续强制工作');
       sysNotify('提示', '太累了，您不能再继续强制工作', '');
       return

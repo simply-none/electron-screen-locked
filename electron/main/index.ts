@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 import ElectronStore from 'electron-store'
-import { readFileList, readJsonFileContent } from './utils/common'
+import { readFileList, readJsonFileContent } from './utils/common.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -182,7 +182,7 @@ async function createWindow() {
     {
       label: '打开应用', click: () => {
         if (win) {
-          focusAppToTop()
+          win.show()
         }
       }
     },
