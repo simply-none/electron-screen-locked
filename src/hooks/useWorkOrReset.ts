@@ -228,6 +228,17 @@ export default function useWorkOrRest() {
     sysNotify('提示', msg || '3秒后开始进入休息状态', '')
     appNotify('提示', msg || '3秒后开始进入休息状态');
     console.warn(gap || (restTimeGap.value) * restTimeGapUnit.value, 'restTimeGapUnit 休息时间间隔')
+    // 判断当前时间是否在11:50-13:30之间
+    let isNoonRestTime = false
+    let noonRestTimeGap = 0
+    if (moment().isBetween(moment('11:50', 'HH:mm'), moment('13:30', 'HH:mm'))) {
+      console.warn('当前处于11:50-13:30之间', moment().format('HH:mm'))
+      isNoonRestTime = true
+      // 计算当前时间距离13:30的时间差(毫秒级)
+      noonRestTimeGap = moment().diff(moment('13:30', 'HH:mm'), 'seconds', true) * 1000
+      console.warn('当前时间距离13:30的时间差', noonRestTimeGap, '毫秒')
+    }
+
     if (!notTimeout) {
       startTimer.value = setTimeout(() => {
         // 有这个标志，代表首次启动应用
@@ -235,7 +246,7 @@ export default function useWorkOrRest() {
           closeWorkTime.value = Date.now()
         }
         status.value = 'rest'
-        window.ipcRenderer.send('start-rest', gap || (restTimeGap.value) * restTimeGapUnit.value);
+        window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
       }, 3000);
     } else {
       // 有这个标志，代表首次启动应用
@@ -243,7 +254,7 @@ export default function useWorkOrRest() {
         closeWorkTime.value = Date.now()
       }
       status.value = 'rest'
-      window.ipcRenderer.send('start-rest', gap || (restTimeGap.value) * restTimeGapUnit.value);
+      window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
     }
   }
 

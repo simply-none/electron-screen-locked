@@ -29,6 +29,7 @@
     "@element-plus/icons-vue": "^2.3.1",
     "@originjs/vite-plugin-commonjs": "^1.0.3",
     "@vitejs/plugin-vue": "^5.0.4",
+    "echarts": "^5.5.1",
     "electron": "^33.0.2",
     "electron-builder": "^24.13.3",
     "electron-store": "^10.0.0",
@@ -43,6 +44,7 @@
     "vite-plugin-require-transform": "^1.0.21",
     "vite-plugin-transform__require-to-import": "^1.1.6",
     "vue": "^3.4.21",
+    "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5",
     "vue-tsc": "^2.0.6"
   }
