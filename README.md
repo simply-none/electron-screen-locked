@@ -10,3 +10,11 @@
 
 - npm i -g cnpm
 - cnpm i xxx
+
+## 开发回顾
+
+### 2025-01-16
+
+package.json中开发依赖应当放在devDependencies中，否则会报错
+
+定时任务还是专用的库好，而非定时器

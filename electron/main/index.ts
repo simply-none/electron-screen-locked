@@ -4,6 +4,7 @@ import path from 'node:path'
 import os from 'node:os'
 import ElectronStore from 'electron-store'
 import { readFileList, readJsonFileContent } from './utils/common.ts'
+import { createJob, stopJob } from './module/job.ts'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -134,24 +135,28 @@ async function createWindow() {
   });
   ipcMain.on("start-work", (e, workTimeGap: number) => {
     hideApp()
-    if (timer) {
-      clearTimeout(timer)
-    }
-    timer = setTimeout(() => {
-      // 工作结束 强制休息
-      win?.webContents.send('close-work')
-    }, workTimeGap)
+    // if (timer) {
+    //   clearTimeout(timer)
+    // }
+    // timer = setTimeout(() => {
+    //   // 工作结束 强制休息
+    //   win?.webContents.send('close-work')
+    // }, workTimeGap)
+    createJob({win, msgName: 'close-work', time: workTimeGap })
   });
   ipcMain.on("start-rest", (e, restTimeGap: number) => {
     focusAppToTop()
-    if (timer) {
-      clearTimeout(timer)
-    }
-    timer = setTimeout(() => {
-      // 休息完之后可以工作操作电脑了
+    // if (timer) {
+    //   clearTimeout(timer)
+    // }
+    // timer = setTimeout(() => {
+    //   // 休息完之后可以工作操作电脑了
+    //   hideApp()
+    //   win?.webContents.send('close-rest')
+    // }, restTimeGap)
+    createJob({win, msgName: 'close-rest', time: restTimeGap, onTick: () => {
       hideApp()
-      win?.webContents.send('close-rest')
-    }, restTimeGap)
+    }})
   });
   ipcMain.on("get-store", (e, key: any) => {
     e.returnValue = store.get(key)
@@ -167,6 +172,12 @@ async function createWindow() {
     store.clear()
     e.returnValue = '清空成功'
   });
+  ipcMain.on("start-job", (e) => {
+    createJob(win, 'tip-job')
+  })
+  ipcMain.on("stop-job", (e) => {
+    stopJob()
+  })
 
   tray = new Tray(icon)
   tray.setToolTip('Electron-setToolTip')

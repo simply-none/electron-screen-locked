@@ -1,6 +1,6 @@
 {
   "name": "electron-screen-locked",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "main": "dist-electron/main/index.js",
   "description": "工作时强制休息，保护眼睛，守护健康！",
   "author": "JadeQiu <xxx@xxx.com>",
@@ -30,8 +30,8 @@
     "@originjs/vite-plugin-commonjs": "^1.0.3",
     "@vitejs/plugin-vue": "^5.0.4",
     "echarts": "^5.5.1",
-    "electron": "^33.0.2",
-    "electron-builder": "^24.13.3",
+    "electron": "33.0.2",
+    "electron-builder": "24.13.3",
     "electron-store": "^10.0.0",
     "element-plus": "^2.8.6",
     "moment": "^2.30.1",
@@ -46,6 +46,7 @@
     "vue": "^3.4.21",
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5",
-    "vue-tsc": "^2.0.6"
+    "vue-tsc": "^2.0.6",
+    "cron": "^3.5.0"
   }
 }
