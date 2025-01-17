@@ -7,7 +7,9 @@ export function createJob({ win, time = 5 * 60 * 1000, onTick = () => {},  msgNa
 		job.stop();
 		job = null;
 	}
-	const jobTime = Math.floor(time / 1000 / 60)
+	let jobTime = Math.floor(time / 1000 / 60);
+	if (jobTime < 1) jobTime = 1;
+
 
 	const currentSecondTime = new Date().getSeconds();
 	console.log(currentSecondTime, jobTime);

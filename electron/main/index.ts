@@ -143,6 +143,8 @@ async function createWindow() {
     //   win?.webContents.send('close-work')
     // }, workTimeGap)
     createJob({win, msgName: 'close-work', time: workTimeGap })
+    // 打开第二窗口
+    createOtherWindow('small')
   });
   ipcMain.on("start-rest", (e, restTimeGap: number) => {
     focusAppToTop()
@@ -197,6 +199,11 @@ async function createWindow() {
         }
       }
     },
+    {
+      label: '退出应用', click: () => {
+        exitApp()
+      }
+    },
   ])
   tray.setContextMenu(contextMenu)
 
@@ -243,19 +250,34 @@ app.on('activate', () => {
   }
 })
 
-// New window example arg: new windows url
-ipcMain.handle('open-win', (_, arg) => {
+function createOtherWindow (arg: string) {
   const childWindow = new BrowserWindow({
+    title: 'second window',
+    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    transparent: true,
+    resizable: true,
+    frame: false,
+    fullscreenable: false,
+    height: 108,
+    width: 226,
     webPreferences: {
       preload,
-      nodeIntegration: true,
-      contextIsolation: false,
+      devTools: true,
     },
   })
 
+  childWindow?.setAlwaysOnTop(true, "screen-saver")
+  childWindow?.show()
+  childWindow?.focus();
+
   if (VITE_DEV_SERVER_URL) {
-    childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
+    childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}?isSecondWindow=true`)
   } else {
-    childWindow.loadFile(indexHtml, { hash: arg })
+    childWindow.loadFile(indexHtml, { hash: arg, query: { isSecondWindow: 'true' } })
   }
+}
+
+// New window example arg: new windows url
+ipcMain.handle('open-win', (_, arg) => {
+  createOtherWindow(arg)
 })

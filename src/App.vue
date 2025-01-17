@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import electronConfig from '../electron-builder.json5'
 import useSetting from './hooks/useSetting';
 import useWorkOrReset from './hooks/useWorkOrReset';
+
+const route = useRoute();
+
 const {
   nextRestTime,
   nextWorkTime,
@@ -12,6 +16,10 @@ const {
 } = useWorkOrReset();
 
 onMounted(() => {
+  console.log(window.location.href)
+  if (window.location.href.includes('isSecondWindow=true')) {
+    return true;
+  }
   startApp();
 });
 const { appBgColor, appInnerColor } = useSetting();

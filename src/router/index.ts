@@ -4,12 +4,16 @@ export default createRouter({
   history: createWebHashHistory(),
   routes: [
     {
+      path: '/',
+      redirect: process.env.NODE_ENV === 'development' ? '/test' : '/home',
+    },
+    {
       path: '/test',
       name: 'test',
       component: () => import('../views/test.vue')
     },
     {
-      path: '/',
+      path: '/home',
       name: 'home',
       component: () => import('../views/home.vue')
     },
@@ -18,5 +22,10 @@ export default createRouter({
       name: 'setting',
       component: () => import('../views/setting.vue')
     },
+    {
+      path: '/small',
+      name: 'small',
+      component: () => import('../views/smallWindow.vue')
+    }
   ]
 })
