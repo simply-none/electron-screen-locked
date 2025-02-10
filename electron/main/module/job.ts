@@ -1,4 +1,5 @@
 import { CronJob } from 'cron';
+import momemt from 'moment';
 
 let job
 
@@ -7,14 +8,16 @@ export function createJob({ win, time = 5 * 60 * 1000, onTick = () => {},  msgNa
 		job.stop();
 		job = null;
 	}
-	let jobTime = Math.floor(time / 1000 / 60);
-	if (jobTime < 1) jobTime = 1;
-
+	let jobTime = time
+	if (jobTime < 5 * 60 * 60) jobTime = 5 * 60 * 60;
 
 	const currentSecondTime = new Date().getSeconds();
+	const currentMinuteTime = new Date().getMinutes();
 	console.log(currentSecondTime, jobTime);
+	const nextRunTime = momemt().add(jobTime, 'milliseconds').toDate()
+
 	job = new CronJob(
-		`${currentSecondTime}  */${jobTime} * * * *`, // cronTime
+		nextRunTime, // cronTime
 		function () {
 			onTick();
 			win?.webContents.send(msgName, Date.now());

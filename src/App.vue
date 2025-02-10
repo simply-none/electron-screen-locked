@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { watch, onMounted } from 'vue';
+import { watch, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
+import { storeToRefs } from 'pinia';
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import electronConfig from '../electron-builder.json5'
 import useSetting from './hooks/useSetting';
 import useWorkOrReset from './hooks/useWorkOrReset';
+import useSettingStore from './store/index'
 
 const route = useRoute();
-
+const store = useSettingStore();
+const { curStatus } = storeToRefs(store);
 const {
   nextRestTime,
   nextWorkTime,
-  curStatus,
   startApp
 } = useWorkOrReset();
 
@@ -23,6 +25,21 @@ onMounted(() => {
   startApp();
 });
 const { appBgColor, appInnerColor } = useSetting();
+
+let bgColor = ref(appBgColor)
+const innerColor = ref(appInnerColor)
+
+watch(() => curStatus.value.value, (n) => {
+  console.log('curStatus', n);
+  if (n == 'rest') {
+    bgColor.value = '#0077d7';
+    innerColor.value = '#0077d7';
+  } else {
+    bgColor.value = appBgColor.value;
+    innerColor.value = appInnerColor.value;
+  }
+}, { immediate: true, deep: true })
+
 
 watch(appInnerColor, (n, o) => {
   console.log('appInnerColor', n, o);
@@ -58,13 +75,13 @@ body,
   width: 100%;
   height: 100%;
   padding: 12px;
-  background-color: v-bind('appBgColor');
+  background-color: v-bind('bgColor');
   box-sizing: border-box;
   &-container {
     width: 100%;
     height: 100%;
     padding: 12px;
-    background-color: v-bind('appInnerColor');
+    background-color: v-bind('innerColor');
     overflow-y: auto;
     box-sizing: border-box;
   }

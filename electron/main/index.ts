@@ -21,6 +21,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let store = new ElectronStore()
 
 let win: BrowserWindow | null = null
+let childWindow: Record<string, BrowserWindow | null> = {};
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
@@ -142,9 +143,11 @@ async function createWindow() {
     //   // 工作结束 强制休息
     //   win?.webContents.send('close-work')
     // }, workTimeGap)
-    createJob({win, msgName: 'close-work', time: workTimeGap })
-    // 打开第二窗口
-    createOtherWindow('small')
+    // createOtherWindow('small')
+    createJob({win, msgName: 'close-work', time: workTimeGap, onTick: () => {
+      // 打开第二窗口
+      // createOtherWindow('small')
+    }})
   });
   ipcMain.on("start-rest", (e, restTimeGap: number) => {
     focusAppToTop()
@@ -158,6 +161,7 @@ async function createWindow() {
     // }, restTimeGap)
     createJob({win, msgName: 'close-rest', time: restTimeGap, onTick: () => {
       hideApp()
+      // closeOtherWindow('small')
     }})
   });
   ipcMain.on("get-store", (e, key: any) => {
@@ -174,12 +178,6 @@ async function createWindow() {
     store.clear()
     e.returnValue = '清空成功'
   });
-  ipcMain.on("start-job", (e) => {
-    createJob(win, 'tip-job')
-  })
-  ipcMain.on("stop-job", (e) => {
-    stopJob()
-  })
 
   tray = new Tray(icon)
   tray.setToolTip('Electron-setToolTip')
@@ -251,7 +249,8 @@ app.on('activate', () => {
 })
 
 function createOtherWindow (arg: string) {
-  const childWindow = new BrowserWindow({
+  if (childWindow[arg])  closeOtherWindow[arg](); 
+  childWindow[arg] = new BrowserWindow({
     title: 'second window',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
     transparent: true,
@@ -266,16 +265,27 @@ function createOtherWindow (arg: string) {
     },
   })
 
-  childWindow?.setAlwaysOnTop(true, "screen-saver")
-  childWindow?.show()
-  childWindow?.focus();
+  childWindow[arg]?.setAlwaysOnTop(true, "screen-saver")
+  childWindow[arg]?.show()
+  childWindow[arg]?.focus();
 
   if (VITE_DEV_SERVER_URL) {
-    childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}?isSecondWindow=true`)
+    childWindow[arg].loadURL(`${VITE_DEV_SERVER_URL}#${arg}?isSecondWindow=true`)
   } else {
-    childWindow.loadFile(indexHtml, { hash: arg, query: { isSecondWindow: 'true' } })
+    childWindow[arg].loadFile(indexHtml, { hash: arg, query: { isSecondWindow: 'true' } })
   }
 }
+
+function closeOtherWindow (arg) {
+  if (childWindow) {
+    childWindow[arg].close()
+    childWindow[arg]?.destroy()
+  }
+}
+
+ipcMain.handle('close-win', async (_, arg) => {
+  closeOtherWindow(arg)
+})
 
 // New window example arg: new windows url
 ipcMain.handle('open-win', (_, arg) => {

@@ -1,6 +1,6 @@
 {
   "name": "electron-screen-locked",
-  "version": "1.0.0-alpha.3",
+  "version": "1.0.0-alpha.5",
   "main": "dist-electron/main/index.js",
   "description": "工作时强制休息，保护眼睛，守护健康！",
   "author": "JadeQiu <xxx@xxx.com>",
@@ -47,6 +47,7 @@
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5",
     "vue-tsc": "^2.0.6",
-    "cron": "^3.5.0"
+    "cron": "^3.5.0",
+    "pinia": "^2.3.1"
   }
 }

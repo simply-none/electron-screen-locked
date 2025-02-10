@@ -5,7 +5,7 @@ export default createRouter({
   routes: [
     {
       path: '/',
-      redirect: process.env.NODE_ENV === 'development' ? '/test' : '/home',
+      redirect: '/home',
     },
     {
       path: '/test',

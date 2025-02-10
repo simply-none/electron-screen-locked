@@ -1,5 +1,5 @@
 <template>
-  <div class="home">
+  <div class="home" v-if="curStatus.value != 'rest'">
     <div class="content-show" v-if="showContent && !showContent.error">
       <div class="content-inner" v-if="showContent.author">
         <div class="rhythmic">{{ showContent.rhythmic }}</div>
@@ -54,8 +54,16 @@
         </div>
       </div>
     </div>
-
-
+  </div>
+  <div class="home-rest" v-else>
+    <div class="home-rest-body">
+      <cus-loading class="home-rest-loading" />
+      <div class="home-rest-text">正在进行更新{{ percentage }}%</div>
+      <div class="home-rest-text">请不要关闭电脑，完成此操作需要一定的时间。</div>
+    </div>
+    <div class="home-rest-bottom">
+      你的电脑将重启若干次。
+    </div>
   </div>
   <div class="setting">
     <el-image :src="SettingSvg" @click="toSetting"></el-image>
@@ -63,6 +71,7 @@
 </template>
 
 <script setup>
+import CusLoading from '../components/loading.vue';
 import SettingSvg from '../assets/set.svg'
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
@@ -72,6 +81,7 @@ const showContent = ref({ error: true });
 const timer = ref(null);
 const toNextWorkTime = ref('00:00:00');
 const toNextRestTime = ref('00:00:00');
+const percentage = ref(1);
 
 
 onMounted(() => {
@@ -83,6 +93,13 @@ onMounted(() => {
     } else if (curStatus.value.value === 'rest') {
       console.log(countDown(nextWorkTime.value), 'countDown', nextWorkTime.value)
       toNextWorkTime.value = countDown(nextWorkTime.value);
+      let isAdd = 1
+      if (percentage.value < 60) {
+        isAdd = Math.random() > 0.6 ? percentage.value + 1 : percentage.value;
+      } else {
+        isAdd = Math.random() > percentage.value * 0.01 ? percentage.value + 1 : percentage.value;
+      }
+      percentage.value = isAdd > 97 ? 97 : isAdd;
     }
   }, 1000);
 });
@@ -104,6 +121,10 @@ const {
   nextWorkTime,
   curStatus,
 } = useWorkOrReset();
+
+watch(() => curStatus.value.value, () => {
+  percentage.value = 1;
+}, { immediate: true, deep: true })
 
 // 写一个倒计时函数，用来计算当前时间距离下次工作时间的时间差，格式是00:00:00
 function countDown(time) {
@@ -211,6 +232,38 @@ function toSetting() {
   &:hover {
     box-shadow: 0px 0px 15px #818181;
     border-radius: 50%;
+  }
+}
+
+.home-rest {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  background: #0077d7;
+  color: #ddd;
+  cursor: none;
+
+  &-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 6px;
+    padding-top: 30vh;
+    font-size: 28px;
+    color: #ddd;
+  }
+
+  &-bottom {
+    font-size: 24px;
+    padding-bottom: 12px;
+  }
+
+  &-loading {
+    padding-bottom: 24px;
   }
 }
 </style>

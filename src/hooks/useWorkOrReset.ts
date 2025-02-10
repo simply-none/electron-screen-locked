@@ -1,10 +1,14 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { storeToRefs } from 'pinia';
 import { sysNotify, appNotify } from '../utils/notify'
 
 import useSetting from './useSetting';
 import moment from 'moment';
+import useSysSetting from '../store/index'
 
 export default function useWorkOrRest() {
+  const sysStore = useSysSetting();
+  const { curStatus } = storeToRefs(sysStore);
   const { forceWorkTimes, todayForceWorkTimes, setForceWorkTimes, setTodayForceWorkTimes } = useSetting();
 
   let startTimer = ref<NodeJS.Timeout | string | number | undefined>(undefined)
@@ -51,11 +55,13 @@ export default function useWorkOrRest() {
   watch(closeWorkTime, () => {
     console.warn(closeWorkTime.value, 'closeWorkTime')
     window.ipcRenderer.send('set-store', 'closeWorkTime', closeWorkTime.value);
+    updStatus()
   })
 
   watch(startWorkTime, () => {
     console.warn(startWorkTime.value, 'startWorkTime')
     window.ipcRenderer.send('set-store', 'startWorkTime', startWorkTime.value);
+    updStatus()
   })
 
   watch(workTimeGap, () => {
@@ -126,19 +132,32 @@ export default function useWorkOrRest() {
     })
   })
 
-  const curStatus = computed(() => {
+  // const curStatus = computed(() => {
+  //   if (startWorkTime.value >= closeWorkTime.value) {
+  //     return {
+  //       label: '正在工作',
+  //       value: 'work',
+  //     };
+  //   } else {
+  //     return {
+  //       label: '正在休息',
+  //       value: 'rest',
+  //     };
+  //   }
+  // })
+  function updStatus() {
     if (startWorkTime.value >= closeWorkTime.value) {
-      return {
+      curStatus.value = {
         label: '正在工作',
         value: 'work',
-      };
+      }
     } else {
-      return {
+      curStatus.value = {
         label: '正在休息',
         value: 'rest',
-      };
+      }
     }
-  })
+  }
 
   // 软件初始化
   function initFn() {
