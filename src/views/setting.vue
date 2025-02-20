@@ -97,8 +97,13 @@
       <el-form-item label="清空系统数据">
         <el-button type="primary" @click="clearStore">清空数据</el-button>
       </el-form-item>
+      <el-form-item label="全局字体设置">
+        <el-select v-model="globalFont" placeholder="请选择" style="width: 300px" @change="setGlobalFont">
+          <el-option v-for="value in globalFontOps" :key="value.value" :label="value.label" :value="value.value"/>
+        </el-select>
+      </el-form-item>
       <el-form-item label="休息背景设置">
-        <el-select v-model="restBgColor" placeholder="Select" style="width: 115px" @change="setRestBg">
+        <el-select v-model="restBgColor" placeholder="请选择" style="width: 300px" @change="setRestBg">
           <el-option v-for="value in restBgOps" :key="value.value" :label="value.label" :value="value.value"/>
         </el-select>
       </el-form-item>
@@ -139,7 +144,7 @@ const {
   nextRestTime,
   nextWorkTime,
 } = useWorkOrReset();
-const { isStartup, forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor, setIsStartup, restBgOps, setRestBg } = useSetting();
+const { isStartup, forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor, setIsStartup, restBgOps, setRestBg, globalFontOps, setGlobalFont, globalFont } = useSetting();
 
 const router = useRouter();
 

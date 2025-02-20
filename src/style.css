@@ -1,7 +1,32 @@
+@font-face {
+  font-family: 'Basteleur Bold';
+  src: url('./assets/font/Basteleur-Bold.ttf');
+}
+
+@font-face {
+  font-family: 'Chill Pixels Mono';
+  src: url('./assets/font/ChillPixels-Mono.otf');
+}
+
+@font-face {
+  font-family: '鼎猎珠海体';
+  src: url('./assets/font/dingliezhuhaifont.ttf');
+}
+
+@font-face {
+  font-family: 'Norican';
+  src: url('./assets/font/Norican-Regular.ttf');
+}
+
+:root {
+  --jianli-global-font: '';
+}
+
 html,
 body {
   width: 100%;
   height: 100%;
   margin: 0;
   padding: 0;
+  font-family: var(--jianli-global-font);
 }

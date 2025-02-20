@@ -297,8 +297,8 @@ function toSetting() {
     left: 50%;
     transform: translate(-50%, -50%);
     padding: 10px 20px;
-    color: #8e8e8e;
-    font-size: 24px;
+    color: #8686861f;
+    font-size: 20em;
   }
 }
 </style>

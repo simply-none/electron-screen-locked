@@ -39,6 +39,7 @@ export default function useSetting() {
   const appBgColor = ref(window.ipcRenderer.sendSync('get-store', 'appBgColor') || '#d4d4d4')
   const isStartup = ref(window.ipcRenderer.sendSync('get-store', 'isStartup') || false)
   const restBg = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || '1')
+  const globalFont = ref(window.ipcRenderer.sendSync('get-store', 'globalFont') || '')
 
   function setForceWorkTimes(value: number) {
     forceWorkTimes.value = value
@@ -76,14 +77,30 @@ export default function useSetting() {
     { label: '模拟Windows更新', value: '1'},
     { label: 'vscode代码背景', value: '2'},
   ]
-
   function setRestBg (value: string) {
     console.log(value, 'setRestBg')
     restBg.value = value
     window.ipcRenderer.sendSync('set-store', 'restBg', value)
   }
 
+  // 全局字体设置
+  const globalFontOps = [
+    { label: 'Basteleur Bold', value: 'Basteleur Bold'},
+    { label: 'Chill Pixels Mono', value: 'Chill Pixels Mono'},
+    { label: '鼎猎珠海体', value: '鼎猎珠海体'},
+    { label: 'Norican', value: 'Norican'},
+    { label: '系统字体', value: ''},
+  ]
+  function setGlobalFont (value: string) {
+    globalFont.value = value
+    window.ipcRenderer.sendSync('set-store', 'globalFont', value)
+    document.documentElement.style.setProperty('--jianli-global-font', value);
+  }
+
   return {
+    globalFont,
+    setGlobalFont,
+    globalFontOps,
     restBg,
     restBgOps,
     setRestBg,
