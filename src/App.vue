@@ -24,7 +24,7 @@ onMounted(() => {
   }
   startApp();
 });
-const { appBgColor, appInnerColor } = useSetting();
+const { appBgColor, appInnerColor, restBg } = useSetting();
 
 let bgColor = ref(appBgColor)
 const innerColor = ref(appInnerColor)
@@ -32,8 +32,14 @@ const innerColor = ref(appInnerColor)
 watch(() => curStatus.value.value, (n) => {
   console.log('curStatus', n);
   if (n == 'rest') {
-    bgColor.value = '#0077d7';
-    innerColor.value = '#0077d7';
+    if (restBg.value == '2') {
+      bgColor.value = '#000c18';
+      innerColor.value = '#000c18';
+    }
+    else {
+      bgColor.value = '#0077d7';
+      innerColor.value = '#0077d7';
+    }
   } else {
     bgColor.value = appBgColor.value;
     innerColor.value = appInnerColor.value;
@@ -53,10 +59,10 @@ document.title = electronConfig.productName;
   <router-view class="page-container" v-slot="{ Component }">
     <el-config-provider :locale="zhCn">
       <transition>
-      <div class="page">
-        <component :is="Component" />
-      </div>
-    </transition>
+        <div class="page">
+          <component :is="Component" />
+        </div>
+      </transition>
     </el-config-provider>
   </router-view>
 </template>
@@ -77,6 +83,7 @@ body,
   padding: 12px;
   background-color: v-bind('bgColor');
   box-sizing: border-box;
+
   &-container {
     width: 100%;
     height: 100%;

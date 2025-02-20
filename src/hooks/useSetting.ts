@@ -38,6 +38,7 @@ export default function useSetting() {
   const appInnerColor = ref(window.ipcRenderer.sendSync('get-store', 'appInnerColor') || '#ffffff')
   const appBgColor = ref(window.ipcRenderer.sendSync('get-store', 'appBgColor') || '#d4d4d4')
   const isStartup = ref(window.ipcRenderer.sendSync('get-store', 'isStartup') || false)
+  const restBg = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || '1')
 
   function setForceWorkTimes(value: number) {
     forceWorkTimes.value = value
@@ -72,16 +73,18 @@ export default function useSetting() {
 
   // 休息时的背景选择
   const restBgOps = [
-    { label: '背景1', value: '1'},
-    { label: '背景2', value: '2'},
+    { label: '模拟Windows更新', value: '1'},
+    { label: 'vscode代码背景', value: '2'},
   ]
 
   function setRestBg (value: string) {
     console.log(value, 'setRestBg')
+    restBg.value = value
     window.ipcRenderer.sendSync('set-store', 'restBg', value)
   }
 
   return {
+    restBg,
     restBgOps,
     setRestBg,
     isStartup,

@@ -68,7 +68,7 @@
         </div>
       </div>
       <div class="home-rest2" v-if="item.value == '2' && restBgColor == '2'">
-        <el-image :src="RestBg" @click="toSetting"></el-image>
+        <el-image :src="RestBg"></el-image>
         <div class="home-rest2-text">{{ toNextWorkTime || '00:00:00' }}</div>
       </div>
     </template>
