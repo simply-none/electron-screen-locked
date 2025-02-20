@@ -97,6 +97,11 @@
       <el-form-item label="清空系统数据">
         <el-button type="primary" @click="clearStore">清空数据</el-button>
       </el-form-item>
+      <el-form-item label="休息背景设置">
+        <el-select v-model="restBgColor" placeholder="Select" style="width: 115px" @change="setRestBg">
+          <el-option v-for="value in restBgOps" :key="value.value" :label="value.label" :value="value.value"/>
+        </el-select>
+      </el-form-item>
       <el-form-item label="开机自启动">
         <el-switch v-model="isStartup" inline-prompt active-text="是" inactive-text="否" @change="changeIsStartup"/>
       </el-form-item>
@@ -134,9 +139,12 @@ const {
   nextRestTime,
   nextWorkTime,
 } = useWorkOrReset();
-const { isStartup, forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor, setIsStartup } = useSetting();
+const { isStartup, forceWorkTimes, setForceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, setAppBgColor, setAppInnerColor, setIsStartup, restBgOps, setRestBg } = useSetting();
 
 const router = useRouter();
+
+const restBgColor = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || restBgOps[0].value);
+setRestBg(restBgColor.value)
 
 function quitApp() {
   confirmDialog.open('确定要退出应用吗？', () => {

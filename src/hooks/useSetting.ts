@@ -70,7 +70,20 @@ export default function useSetting() {
     window.ipcRenderer.sendSync('set-store', 'appBgColor', value)
   }
 
+  // 休息时的背景选择
+  const restBgOps = [
+    { label: '背景1', value: '1'},
+    { label: '背景2', value: '2'},
+  ]
+
+  function setRestBg (value: string) {
+    console.log(value, 'setRestBg')
+    window.ipcRenderer.sendSync('set-store', 'restBg', value)
+  }
+
   return {
+    restBgOps,
+    setRestBg,
     isStartup,
     forceWorkTimes,
     todayForceWorkTimes,

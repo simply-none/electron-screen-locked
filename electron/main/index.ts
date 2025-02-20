@@ -6,6 +6,9 @@ import ElectronStore from 'electron-store'
 import { readFileList, readJsonFileContent } from './utils/common.ts'
 import { createJob, stopJob } from './module/job.ts'
 
+let appName = '渐离App'
+app.setName(appName)
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 process.env.APP_ROOT = path.join(__dirname, '../..')
@@ -73,6 +76,14 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
+function isSetStartup (isStartup, hidden = false) {
+  app.setLoginItemSettings({
+    openAtLogin: isStartup,
+    // 如果应用以管理员身份运行，设置此选项为true可避免UAC（用户账户控制）对话框在Windows上弹出。
+    openAsHidden: hidden, // macOS特有的，当设置为true时，应用会隐藏式启动
+  })
+}
+
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Main window',
@@ -106,23 +117,13 @@ async function createWindow() {
     //注意：非开发环境
     if (!VITE_DEV_SERVER_URL) {
       if (process.platform === "darwin") {
-        app.setLoginItemSettings({
-          openAtLogin: isStartup,//是否开机启动
-          openAsHidden: false//是否隐藏主窗体，保留托盘位置
-        });
+        isSetStartup(isStartup)
       } else {
-        app.setLoginItemSettings({
-          openAtLogin: isStartup,
-          openAsHidden: false,
-        });
+        isSetStartup(isStartup)
       }
     }
 
-    app.setLoginItemSettings({
-      openAtLogin: isStartup,
-      // 如果应用以管理员身份运行，设置此选项为true可避免UAC（用户账户控制）对话框在Windows上弹出。
-      openAsHidden: false, // macOS特有的，当设置为true时，应用会隐藏式启动
-    })
+    isSetStartup(isStartup)
   });
   ipcMain.on("poet-data", (e, fullScreen: boolean) => {
     // 获取诗词数据，用于首页展示
@@ -180,8 +181,8 @@ async function createWindow() {
   });
 
   tray = new Tray(icon)
-  tray.setToolTip('Electron-setToolTip')
-  tray.setTitle('Electron-setTitle')
+  tray.setToolTip(appName)
+  tray.setTitle(appName)
   const contextMenu = Menu.buildFromTemplate([
     {
       label: '隐藏应用', click: () => {

@@ -55,27 +55,38 @@
       </div>
     </div>
   </div>
-  <div class="home-rest" v-else>
-    <div class="home-rest-body">
-      <cus-loading class="home-rest-loading" />
-      <div class="home-rest-text">正在进行更新{{ percentage }}%</div>
-      <div class="home-rest-text">请不要关闭电脑，完成此操作需要一定的时间。</div>
-    </div>
-    <div class="home-rest-bottom">
-      你的电脑将重启若干次。
-    </div>
-  </div>
+  <template v-else>
+    <template v-for="item in restBgOps" :key="item.value">
+      <div class="home-rest" v-if="item.value == '1' && restBgColor == '1'">
+        <div class="home-rest-body">
+          <cus-loading class="home-rest-loading" />
+          <div class="home-rest-text">正在进行更新{{ percentage }}%</div>
+          <div class="home-rest-text">请不要关闭电脑，完成此操作需要一定的时间。</div>
+        </div>
+        <div class="home-rest-bottom">
+          你的电脑将重启若干次。
+        </div>
+      </div>
+      <div class="home-rest2" v-if="item.value == '2' && restBgColor == '2'">
+        <el-image :src="RestBg" @click="toSetting"></el-image>
+        <div class="home-rest2-text">{{ toNextWorkTime || '00:00:00' }}</div>
+      </div>
+    </template>
+  </template>
+
   <div class="setting">
     <el-image :src="SettingSvg" @click="toSetting"></el-image>
   </div>
 </template>
 
 <script setup>
-import CusLoading from '../components/loading.vue';
-import SettingSvg from '../assets/set.svg'
+import CusLoading from '../../components/loading.vue';
+import SettingSvg from '../../assets/set.svg'
+import RestBg from '../../assets/rest-bg.png'
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import useWorkOrReset from '../hooks/useWorkOrReset';
+import useWorkOrReset from '../../hooks/useWorkOrReset';
+import useSetting from '../../hooks/useSetting';
 
 const showContent = ref({ error: true });
 const timer = ref(null);
@@ -83,6 +94,9 @@ const toNextWorkTime = ref('00:00:00');
 const toNextRestTime = ref('00:00:00');
 const percentage = ref(1);
 
+const { restBgOps, setRestBg } = useSetting();
+
+const restBgColor = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || restBgOps[0].value);
 
 onMounted(() => {
   toNext();
@@ -220,7 +234,7 @@ function toSetting() {
 }
 
 
-.el-image {
+.setting .el-image {
   position: fixed;
   width: 24px;
   height: 24px;
@@ -264,6 +278,27 @@ function toSetting() {
 
   &-loading {
     padding-bottom: 24px;
+  }
+}
+
+.home-rest2 {
+  width: 100%;
+  height: 100%;
+  position: relative;
+
+  .el-image {
+    width: 100%;
+    height: 100%;
+  }
+
+  .home-rest2-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 10px 20px;
+    color: #8e8e8e;
+    font-size: 24px;
   }
 }
 </style>
