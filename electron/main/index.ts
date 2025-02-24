@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain, dialog, globalShortcut, Tray, Menu, nativeImage, crashReporter } from 'electron'
+import { app, session, BrowserWindow, shell, ipcMain, dialog, globalShortcut, Tray, Menu, nativeImage, crashReporter } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -76,7 +76,7 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0)
 }
 
-function isSetStartup (isStartup, hidden = false) {
+function isSetStartup(isStartup, hidden = false) {
   app.setLoginItemSettings({
     openAtLogin: isStartup,
     // 如果应用以管理员身份运行，设置此选项为true可避免UAC（用户账户控制）对话框在Windows上弹出。
@@ -96,6 +96,8 @@ async function createWindow() {
     webPreferences: {
       preload,
       devTools: true,
+      // 加载扩展必须启动该配置
+      plugins: true,
     },
   })
 
@@ -145,10 +147,12 @@ async function createWindow() {
     //   win?.webContents.send('close-work')
     // }, workTimeGap)
     // createOtherWindow('small')
-    createJob({win, msgName: 'close-work', time: workTimeGap, onTick: () => {
-      // 打开第二窗口
-      // createOtherWindow('small')
-    }})
+    createJob({
+      win, msgName: 'close-work', time: workTimeGap, onTick: () => {
+        // 打开第二窗口
+        // createOtherWindow('small')
+      }
+    })
   });
   ipcMain.on("start-rest", (e, restTimeGap: number) => {
     focusAppToTop()
@@ -160,10 +164,12 @@ async function createWindow() {
     //   hideApp()
     //   win?.webContents.send('close-rest')
     // }, restTimeGap)
-    createJob({win, msgName: 'close-rest', time: restTimeGap, onTick: () => {
-      hideApp()
-      // closeOtherWindow('small')
-    }})
+    createJob({
+      win, msgName: 'close-rest', time: restTimeGap, onTick: () => {
+        hideApp()
+        // closeOtherWindow('small')
+      }
+    })
   });
   ipcMain.on("get-store", (e, key: any) => {
     e.returnValue = store.get(key)
@@ -225,7 +231,9 @@ async function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow)
+app.whenReady().then(async () => {
+  createWindow()
+})
 
 app.on('window-all-closed', (e) => {
   e.preventDefault(); //先阻止一下默认行为，不然直接关了，提示框只会闪一下
@@ -249,8 +257,8 @@ app.on('activate', () => {
   }
 })
 
-function createOtherWindow (arg: string) {
-  if (childWindow[arg])  closeOtherWindow[arg](); 
+function createOtherWindow(arg: string) {
+  if (childWindow[arg]) closeOtherWindow[arg]();
   childWindow[arg] = new BrowserWindow({
     title: 'second window',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
@@ -263,6 +271,8 @@ function createOtherWindow (arg: string) {
     webPreferences: {
       preload,
       devTools: true,
+      // 加载扩展必须启动该配置
+      plugins: true,
     },
   })
 
@@ -277,7 +287,7 @@ function createOtherWindow (arg: string) {
   }
 }
 
-function closeOtherWindow (arg) {
+function closeOtherWindow(arg) {
   if (childWindow) {
     childWindow[arg].close()
     childWindow[arg]?.destroy()

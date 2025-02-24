@@ -1,92 +1,110 @@
 <template>
-  <div class="home" v-if="curStatus.value != 'rest'">
-    <div class="content-show" v-if="showContent && !showContent.error">
-      <div class="content-inner" v-if="showContent.author">
-        <div class="rhythmic">{{ showContent.rhythmic }}</div>
-        <div class="author">{{ showContent.author }}</div>
-        <div class="content">
-          <div v-for="paragraphs in showContent.paragraphs" :key="paragraphs">
-            {{ paragraphs }}
+  <layout-vue>
+    <template #main>
+      <component :is="Component" />
+      <div class="home" v-if="curStatus.value != 'rest'">
+        <div class="content-show" v-if="showContent && !showContent.error">
+          <div class="content-inner" v-if="showContent.author">
+            <div class="rhythmic">{{ showContent.rhythmic }}</div>
+            <div class="author">{{ showContent.author }}</div>
+            <div class="content">
+              <div v-for="paragraphs in showContent.paragraphs" :key="paragraphs">
+                {{ paragraphs }}
+              </div>
+            </div>
+          </div>
+          <div class="content-inner" v-if="showContent.name">
+            <div class="author">{{ showContent.name }}</div>
+            <div class="content">
+              <div>
+                {{ showContent.description }}
+              </div>
+            </div>
+          </div>
+          <div class="content-toggle">
+            <el-button type="primary" @click="toNext">下一个</el-button>
+          </div>
+        </div>
+        <div class="cur-status">
+          <div class="item">
+            <div class="label">
+              当前状态
+            </div>
+            <div class="value">
+              {{ curStatus.label }}
+            </div>
+          </div>
+          <div class="item" v-if="curStatus.value === 'rest'">
+            <div class="label">
+              下次工作时间
+            </div>
+            <div class="value">
+              {{ nextWorkTime }}
+            </div>
+            <div class="value">
+              倒计时：{{ toNextWorkTime }}
+            </div>
+          </div>
+          <div class="item" v-else-if="curStatus.value === 'work'">
+            <div class="label">
+              下次休息时间
+            </div>
+            <div class="value">
+              {{ nextRestTime }}
+            </div>
+            <div class="value">
+              倒计时：{{ toNextRestTime }}
+            </div>
           </div>
         </div>
       </div>
-      <div class="content-inner" v-if="showContent.name">
-        <div class="author">{{ showContent.name }}</div>
-        <div class="content">
-          <div>
-            {{ showContent.description }}
+      <template v-else>
+        <template v-for="item in restBgOps" :key="item.value">
+          <div class="home-rest" v-if="item.value == '1' && restBgColor == '1'">
+            <div class="home-rest-body">
+              <cus-loading class="home-rest-loading" />
+              <div class="home-rest-text">正在进行更新{{ percentage }}%</div>
+              <div class="home-rest-text">请不要关闭电脑，完成此操作需要一定的时间。</div>
+            </div>
+            <div class="home-rest-bottom">
+              你的电脑将重启若干次。
+            </div>
           </div>
-        </div>
-      </div>
-      <div class="content-toggle">
-        <el-button type="primary" @click="toNext">下一个</el-button>
-      </div>
-    </div>
-    <div class="cur-status">
-      <div class="item">
-        <div class="label">
-          当前状态
-        </div>
-        <div class="value">
-          {{ curStatus.label }}
-        </div>
-      </div>
-      <div class="item" v-if="curStatus.value === 'rest'">
-        <div class="label">
-          下次工作时间
-        </div>
-        <div class="value">
-          {{ nextWorkTime }}
-        </div>
-        <div class="value">
-          倒计时：{{ toNextWorkTime }}
-        </div>
-      </div>
-      <div class="item" v-else-if="curStatus.value === 'work'">
-        <div class="label">
-          下次休息时间
-        </div>
-        <div class="value">
-          {{ nextRestTime }}
-        </div>
-        <div class="value">
-          倒计时：{{ toNextRestTime }}
-        </div>
-      </div>
-    </div>
-  </div>
-  <template v-else>
-    <template v-for="item in restBgOps" :key="item.value">
-      <div class="home-rest" v-if="item.value == '1' && restBgColor == '1'">
-        <div class="home-rest-body">
-          <cus-loading class="home-rest-loading" />
-          <div class="home-rest-text">正在进行更新{{ percentage }}%</div>
-          <div class="home-rest-text">请不要关闭电脑，完成此操作需要一定的时间。</div>
-        </div>
-        <div class="home-rest-bottom">
-          你的电脑将重启若干次。
-        </div>
-      </div>
-      <div class="home-rest2" v-if="item.value == '2' && restBgColor == '2'">
-        <el-image :src="RestBg"></el-image>
-        <div class="home-rest2-text">{{ toNextWorkTime || '00:00:00' }}</div>
+          <div class="home-rest2" v-if="item.value == '2' && restBgColor == '2'">
+            <el-image :src="RestBg"></el-image>
+            <div class="home-rest2-text">
+              <div class="home-rest2-text-item" v-for="(tItem, tIndex) in (toNextWorkTime || '00:00:00').split(':')"
+                :key="tItem">
+                <div class="home-rest2-text-number">{{ tItem }}</div>
+                <div class="home-rest2-text-split"
+                  v-if="(toNextWorkTime || '00:00:00').split(':').length != tIndex + 1">:
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+      <div class="setting">
+        <el-image :src="SettingSvg" @click="toSetting"></el-image>
       </div>
     </template>
-  </template>
+  </layout-vue>
 
-  <div class="setting">
-    <el-image :src="SettingSvg" @click="toSetting"></el-image>
-  </div>
 </template>
 
 <script setup>
-import CusLoading from '../../components/loading.vue';
-import SettingSvg from '../../assets/set.svg'
-import RestBg from '../../assets/rest-bg.png'
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import useWorkOrReset from '../../hooks/useWorkOrReset';
-import useSetting from '../../hooks/useSetting';
+import { storeToRefs } from 'pinia';
+
+import LayoutVue from '@/components/layout.vue';
+import CusLoading from '@/components/loading.vue';
+import SettingSvg from '@/assets/set.svg'
+import RestBg from '@/assets/rest-bg.png'
+import { useWorkOrRest } from '@/hooks/useWorkOrReset';
+import useGlobalSetting from '@/store/useGlobalSetting';
+
+const router = useRouter();
 
 const showContent = ref({ error: true });
 const timer = ref(null);
@@ -94,9 +112,14 @@ const toNextWorkTime = ref('00:00:00');
 const toNextRestTime = ref('00:00:00');
 const percentage = ref(1);
 
-const { restBgOps, setRestBg } = useSetting();
+const {
+  nextRestTime,
+  nextWorkTime,
+  curStatus
+} = useWorkOrRest();
+const { homeModeOps } = storeToRefs(useGlobalSetting());
 
-const restBgColor = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || restBgOps[0].value);
+const restBgColor = ref(window.ipcRenderer.sendSync('get-store', 'forceLockMode') || homeModeOps.value[0].value);
 
 onMounted(() => {
   toNext();
@@ -128,16 +151,20 @@ function toNext() {
   console.log('poetData', poetData);
 }
 
-const router = useRouter();
-
-const {
-  nextRestTime,
-  nextWorkTime,
-  curStatus,
-} = useWorkOrReset();
+function toggleComponent (status) {
+  switch(status) {
+    case 'work':
+      return 'work'
+    case 'rest':
+      return 'rest'
+  }
+}
 
 watch(() => curStatus.value.value, () => {
+  console.log(curStatus.value, 'curStatus')
   percentage.value = 1;
+  // 首页展示组件模式变更
+  toggleComponent(curStatus.value.value)
 }, { immediate: true, deep: true })
 
 // 写一个倒计时函数，用来计算当前时间距离下次工作时间的时间差，格式是00:00:00
@@ -298,7 +325,21 @@ function toSetting() {
     transform: translate(-50%, -50%);
     padding: 10px 20px;
     color: #8686861f;
-    font-size: 20em;
+    display: flex;
+  }
+
+  .home-rest2-text-item {
+    display: flex;
+  }
+
+  .home-rest2-text-number {
+    text-align: center;
+    width: 400px;
+  }
+
+  .home-rest2-text-number,
+  .home-rest2-text-split {
+    font-size: 200px;
   }
 }
 </style>

@@ -33,10 +33,11 @@
 </template>
 
 <script setup>
-import SettingSvg from '../assets/set.svg'
+import SettingSvg from '@/assets/set.svg'
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import useWorkOrReset from '../hooks/useWorkOrReset';
+import useWorkOrResetStore from '@/store/useWorkOrReset';
+import { storeToRefs } from 'pinia';
 
 const showContent = ref({ error: true });
 const timer = ref(null);
@@ -75,7 +76,7 @@ const {
   startWorkTime,
   closeWorkTime,
   curStatus,
-} = useWorkOrReset();
+} = storeToRefs(useWorkOrResetStore());
 
 // 写一个倒计时函数，用来计算当前时间距离下次工作时间的时间差，格式是00:00:00
 function countDown(time) {

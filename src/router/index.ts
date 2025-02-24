@@ -20,7 +20,7 @@ export default createRouter({
     {
       path: '/setting',
       name: 'setting',
-      component: () => import('../views/setting.vue')
+      component: () => import('../views/setting/index.vue')
     },
     {
       path: '/small',

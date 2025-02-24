@@ -1,25 +1,17 @@
 import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { storeToRefs } from 'pinia';
+import { storeToRefs, defineStore } from 'pinia';
 import { sysNotify, appNotify } from '../utils/notify'
 
-import useSetting from './useSetting';
+import useGlobalSetting from '../store/useGlobalSetting';
+import useWorkOrRestStore from '../store/useWorkOrReset'
 import moment from 'moment';
-import useSysSetting from '../store/index'
 
-export default function useWorkOrRest() {
-  const sysStore = useSysSetting();
-  const { curStatus } = storeToRefs(sysStore);
-  const { forceWorkTimes, todayForceWorkTimes, setForceWorkTimes, setTodayForceWorkTimes } = useSetting();
+export function useWorkOrRest() {
+  const { setForceWorkTimes, setTodayForceWorkTimes } = useGlobalSetting();
+  const { forceWorkTimes, todayForceWorkTimes, curStatus } = storeToRefs(useGlobalSetting())
+  const { workTimeGap, restTimeGap, workTimeGapUnit, restTimeGapUnit, closeWorkTime, startWorkTime } = storeToRefs(useWorkOrRestStore())
 
   let startTimer = ref<NodeJS.Timeout | string | number | undefined>(undefined)
-
-  const storeLastWorkTime = window.ipcRenderer.sendSync('get-store', 'closeWorkTime') || Date.now();
-  const storeCurrentWorkTimeOrigin = window.ipcRenderer.sendSync('get-store', 'startWorkTime')
-  const storeCurrentWorkTime = storeCurrentWorkTimeOrigin || Date.now();
-  const storeWorkTimeGap = window.ipcRenderer.sendSync('get-store', 'workTimeGap') || 35;
-  const storeRestTimeGap = window.ipcRenderer.sendSync('get-store', 'restTimeGap') || 5;
-  const storeWorkTimeGapUnit = window.ipcRenderer.sendSync('get-store', 'workTimeGapUnit') || 60 * 1000;
-  const storeRestTimeGapUnit = window.ipcRenderer.sendSync('get-store', 'restTimeGapUnit') || 60 * 1000;
 
   let firstWaitTime = 30 * 1000
   if (process.env.NODE_ENV === 'development') {
@@ -27,30 +19,6 @@ export default function useWorkOrRest() {
   }
 
   const waitTime = 3 * 1000
-
-  const status = ref('work');
-  console.warn(storeCurrentWorkTimeOrigin, 'storeLastWorkTime')
-  if (!storeCurrentWorkTimeOrigin) {
-    status.value = ''
-  }
-
-  // 初始化数据
-  const initData = ({
-    closeWorkTime: storeLastWorkTime,
-    startWorkTime: storeCurrentWorkTime,
-    workTimeGap: storeWorkTimeGap,
-    restTimeGap: storeRestTimeGap,
-    workTimeGapUnit: storeWorkTimeGapUnit,
-    restTimeGapUnit: storeRestTimeGapUnit,
-  })
-  window.ipcRenderer.sendSync('set-store', 'multi-field', initData);
-
-  const closeWorkTime = ref(window.ipcRenderer.sendSync('get-store', 'closeWorkTime'))
-  const startWorkTime = ref(window.ipcRenderer.sendSync('get-store', 'startWorkTime'));
-  const workTimeGap = ref(window.ipcRenderer.sendSync('get-store', 'workTimeGap'));
-  const restTimeGap = ref(window.ipcRenderer.sendSync('get-store', 'restTimeGap'));
-  const workTimeGapUnit = ref(window.ipcRenderer.sendSync('get-store', 'workTimeGapUnit'));
-  const restTimeGapUnit = ref(window.ipcRenderer.sendSync('get-store', 'restTimeGapUnit'));
 
   watch(closeWorkTime, () => {
     console.warn(closeWorkTime.value, 'closeWorkTime')
@@ -132,20 +100,17 @@ export default function useWorkOrRest() {
     })
   })
 
-  // const curStatus = computed(() => {
-  //   if (startWorkTime.value >= closeWorkTime.value) {
-  //     return {
-  //       label: '正在工作',
-  //       value: 'work',
-  //     };
-  //   } else {
-  //     return {
-  //       label: '正在休息',
-  //       value: 'rest',
-  //     };
-  //   }
-  // })
-  function updStatus() {
+  function updStatus(updByStatus = '') {
+    // 通过status更新
+    if (updByStatus) {
+      return curStatus.value = updByStatus == 'work' ? {
+        label: '正在工作',
+        value: 'work',
+      } : updByStatus == 'rest' ? {
+        label: '正在休息',
+        value: 'rest',
+      } : {}
+    }
     if (startWorkTime.value >= closeWorkTime.value) {
       curStatus.value = {
         label: '正在工作',
@@ -163,12 +128,12 @@ export default function useWorkOrRest() {
   function initFn() {
     // 上一次工作时间到现在时间的间隔，如果小于
     const currentTime = Date.now()
-    console.warn(status.value, 'status')
+    console.warn(curStatus.value, 'curStatus')
     console.warn(currentTime - startWorkTime.value, workTimeGap.value * workTimeGapUnit.value, 'work')
     console.warn(currentTime - closeWorkTime.value, restTimeGap.value * restTimeGapUnit.value, 'rest')
 
 
-    if (status.value === '') {
+    if (!curStatus.value || curStatus.value.value === '') {
       // 第一次启动，开始工作
       startForceWorkFn({ gap: workTimeGap.value * workTimeGapUnit.value, msg: '应用启动中，30s后您将开始进入工作状态。', notTimeout: true, msgShowTime: firstWaitTime, isInitApp: true })
       console.warn('应用启动中，开始工作1')
@@ -187,17 +152,18 @@ export default function useWorkOrRest() {
     }
 
     // 第一次启动，开始工作2
+    console.log('应用启动中，开始工作2')
     startForceWorkFn({ gap: workTimeGap.value * workTimeGapUnit.value, msg: '应用启动中，上一个应用运行机制已结束，30s后您将开始进入工作状态。', notTimeout: false, msgShowTime: firstWaitTime, isInitApp: true })
     console.warn('应用启动中，开始工作2')
   }
 
   // 改动立刻生效
   function changeEffectFn() {
-    console.warn('改动立刻生效', status.value, 1)
-    if (status.value === 'work') {
+    console.warn('改动立刻生效', curStatus.value, 1)
+    if (curStatus.value && curStatus.value.value === 'work') {
       startWorkFn()
     }
-    if (status.value === 'rest') {
+    if (curStatus.value && curStatus.value.value === 'rest') {
       // 上一次工作结束时间开始计算
       const diffDate = restTimeGap.value * restTimeGapUnit.value - (Date.now() - closeWorkTime.value)
       startRestFn({ gap: diffDate })
@@ -226,7 +192,7 @@ export default function useWorkOrRest() {
         if (isInitApp || isUpdateStartTime) {
           startWorkTime.value = Date.now()
         }
-        status.value = 'work'
+        updStatus('work')
         window.ipcRenderer.send('start-work', gap || (workTimeGap.value) * workTimeGapUnit.value);
       }, msgShowTime || waitTime);
     } else {
@@ -234,7 +200,7 @@ export default function useWorkOrRest() {
       if (isInitApp || isUpdateStartTime) {
         startWorkTime.value = Date.now()
       }
-      status.value = 'work'
+      updStatus('work')
       window.ipcRenderer.send('start-work', gap || (workTimeGap.value) * workTimeGapUnit.value);
     }
   }
@@ -271,7 +237,7 @@ export default function useWorkOrRest() {
         if (isUpdateCloseTime) {
           closeWorkTime.value = Date.now()
         }
-        status.value = 'rest'
+        updStatus('rest')
         window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
       }, waitTime);
     } else {
@@ -279,7 +245,7 @@ export default function useWorkOrRest() {
       if (isUpdateCloseTime) {
         closeWorkTime.value = Date.now()
       }
-      status.value = 'rest'
+      updStatus('rest')
       window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
     }
   }
@@ -302,4 +268,3 @@ export default function useWorkOrRest() {
     curStatus,
   }
 }
-

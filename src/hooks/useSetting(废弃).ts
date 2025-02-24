@@ -1,7 +1,8 @@
 import { ref } from "vue"
 import moment from 'moment'
+import { defineStore } from 'pinia'
 
-export default function useSetting() {
+const useSetting = defineStore('setting1', () => {
   // 强制解锁屏幕限制（即可以玩电脑）
   const storeForceWorkTimes = window.ipcRenderer.sendSync('get-store', 'forceWorkTimes') || 0
   let storeTodayForceWorkTimes = window.ipcRenderer.sendSync('get-store', 'todayForceWorkTimes')
@@ -38,7 +39,7 @@ export default function useSetting() {
   const appInnerColor = ref(window.ipcRenderer.sendSync('get-store', 'appInnerColor') || '#ffffff')
   const appBgColor = ref(window.ipcRenderer.sendSync('get-store', 'appBgColor') || '#d4d4d4')
   const isStartup = ref(window.ipcRenderer.sendSync('get-store', 'isStartup') || false)
-  const restBg = ref(window.ipcRenderer.sendSync('get-store', 'restBg') || '1')
+  const forceLockMode = ref(window.ipcRenderer.sendSync('get-store', 'forceLockMode') || '1')
   const globalFont = ref(window.ipcRenderer.sendSync('get-store', 'globalFont') || '')
 
   function setForceWorkTimes(value: number) {
@@ -79,8 +80,8 @@ export default function useSetting() {
   ]
   function setRestBg (value: string) {
     console.log(value, 'setRestBg')
-    restBg.value = value
-    window.ipcRenderer.sendSync('set-store', 'restBg', value)
+    forceLockMode.value = value
+    window.ipcRenderer.sendSync('set-store', 'forceLockMode', value)
   }
 
   // 全局字体设置
@@ -96,12 +97,13 @@ export default function useSetting() {
     window.ipcRenderer.sendSync('set-store', 'globalFont', value)
     document.documentElement.style.setProperty('--jianli-global-font', value);
   }
+  setGlobalFont(globalFont.value)
 
   return {
     globalFont,
     setGlobalFont,
     globalFontOps,
-    restBg,
+    forceLockMode,
     restBgOps,
     setRestBg,
     isStartup,
@@ -115,4 +117,6 @@ export default function useSetting() {
     setAppBgColor,
     setIsStartup,
   }
-}
+})
+
+export default useSetting

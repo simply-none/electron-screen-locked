@@ -7,7 +7,7 @@ import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 
-
+import './utils/devtools'
 import './style.css'
 import './lib/heti.min.css'
 

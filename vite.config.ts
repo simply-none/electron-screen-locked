@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
 import pkg from './package.json'
 import { jsonX } from 'vite-plugin-jsonx';
+import { resolve } from 'node:path'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ command }) => {
@@ -16,6 +17,11 @@ export default defineConfig(({ command }) => {
   return {
     optimizeDeps: {
       include: ['electron-store']
+    },
+    resolve: {
+      alias: {
+        '@': resolve(__dirname, './src'),
+      }
     },
     plugins: [
       vue(),

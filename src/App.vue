@@ -3,19 +3,14 @@ import { watch, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import electronConfig from '../electron-builder.json5'
-import useSetting from './hooks/useSetting';
-import useWorkOrReset from './hooks/useWorkOrReset';
-import useSettingStore from './store/index'
+import electronConfig from './electron-builder.json5'
+import useWorkOrResetStore from '@/store/useWorkOrReset'
+import { useWorkOrRest } from '@/hooks/useWorkOrReset';
+import useGlobalSetting from '@/store/useGlobalSetting';
 
-const route = useRoute();
-const store = useSettingStore();
-const { curStatus } = storeToRefs(store);
-const {
-  nextRestTime,
-  nextWorkTime,
-  startApp
-} = useWorkOrReset();
+const { appBgColor, appInnerColor, forceLockMode } = storeToRefs(useGlobalSetting());
+const { curStatus } = storeToRefs(useGlobalSetting());
+const { startApp, nextRestTime, nextWorkTime } = useWorkOrRest(); 
 
 onMounted(() => {
   console.log(window.location.href)
@@ -24,15 +19,14 @@ onMounted(() => {
   }
   startApp();
 });
-const { appBgColor, appInnerColor, restBg } = useSetting();
-
+console.log('appBgColor', appBgColor);
 let bgColor = ref(appBgColor)
 const innerColor = ref(appInnerColor)
 
 watch(() => curStatus.value.value, (n) => {
   console.log('curStatus', n);
   if (n == 'rest') {
-    if (restBg.value == '2') {
+    if (forceLockMode.value == '2') {
       bgColor.value = '#000c18';
       innerColor.value = '#000c18';
     }
@@ -56,12 +50,10 @@ document.title = electronConfig.productName;
 </script>
 
 <template>
-  <router-view class="page-container" v-slot="{ Component }">
+  <router-view v-slot="{ Component }">
     <el-config-provider :locale="zhCn">
       <transition>
-        <div class="page">
-          <component :is="Component" />
-        </div>
+        <component :is="Component" />
       </transition>
     </el-config-provider>
   </router-view>

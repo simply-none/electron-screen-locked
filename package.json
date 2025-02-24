@@ -21,7 +21,9 @@
   },
   "type": "module",
   "scripts": {
+    "q": "npm run debug && npm run dev",
     "dev": "vite",
+    "debug": "bash ./node_modules/.bin/vue-devtools",
     "build": "vue-tsc --noEmit && vite build && electron-builder",
     "preview": "vite preview"
   },
@@ -29,12 +31,16 @@
     "@element-plus/icons-vue": "^2.3.1",
     "@originjs/vite-plugin-commonjs": "^1.0.3",
     "@vitejs/plugin-vue": "^5.0.4",
+    "@vue/devtools": "^7.7.2",
+    "cron": "^3.5.0",
     "echarts": "^5.5.1",
     "electron": "33.0.2",
     "electron-builder": "24.13.3",
+    "electron-devtools-installer": "^4.0.0",
     "electron-store": "^10.0.0",
     "element-plus": "^2.8.6",
     "moment": "^2.30.1",
+    "pinia": "^2.3.1",
     "sass": "^1.80.5",
     "typescript": "^5.4.2",
     "vite": "^5.1.5",
@@ -44,10 +50,9 @@
     "vite-plugin-require-transform": "^1.0.21",
     "vite-plugin-transform__require-to-import": "^1.1.6",
     "vue": "^3.4.21",
+    "vue-devtools": "^5.1.4",
     "vue-echarts": "^7.0.3",
     "vue-router": "^4.4.5",
-    "vue-tsc": "^2.0.6",
-    "cron": "^3.5.0",
-    "pinia": "^2.3.1"
+    "vue-tsc": "^2.0.6"
   }
 }
