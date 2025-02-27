@@ -1,5 +1,7 @@
 <template>
-  <div class="layout">
+  <div class="layout" :style="{
+    padding: props.isPadding ? '12px' : '0px',
+  }">
     <div class="top" v-if="$slots.top" ref="top">
       <slot name="top">
         顶部
@@ -30,8 +32,12 @@ import { onMounted, ref } from 'vue';
 import useGlobalSetting from '../store/useGlobalSetting';
 import { storeToRefs } from 'pinia';
 
-const { appBgColor, appInnerColor } = storeToRefs(useGlobalSetting());
-
+const props = defineProps({
+  isPadding: {
+    type: Boolean,
+    default: false,
+  },
+});
 const top = ref<HTMLElement>();
 const bottom = ref<HTMLElement>();
 const content = ref<HTMLElement>();
@@ -46,7 +52,6 @@ onMounted(() => {
   flex-direction: column;
   height: 100%;
   width: 100%;
-  padding: 12px;
   box-sizing: border-box;
 
   .content {

@@ -7,9 +7,10 @@ import useWorkOrRestStore from '../store/useWorkOrReset'
 import moment from 'moment';
 
 export function useWorkOrRest() {
-  const { setForceWorkTimes, setTodayForceWorkTimes } = useGlobalSetting();
-  const { forceWorkTimes, todayForceWorkTimes, curStatus } = storeToRefs(useGlobalSetting())
-  const { workTimeGap, restTimeGap, workTimeGapUnit, restTimeGapUnit, closeWorkTime, startWorkTime } = storeToRefs(useWorkOrRestStore())
+  const { setForceWorkTimes, setTodayForceWorkTimes, setCurStatus } = useGlobalSetting();
+  const { forceWorkTimesC, todayForceWorkTimesC, curStatusC } = storeToRefs(useGlobalSetting())
+  const { setStartWorkTime, setCloseWorkTime } = useWorkOrRestStore();
+  const { workTimeGapC, restTimeGapC, workTimeGapUnitC, restTimeGapUnitC, closeWorkTimeC, startWorkTimeC } = storeToRefs(useWorkOrRestStore())
 
   let startTimer = ref<NodeJS.Timeout | string | number | undefined>(undefined)
 
@@ -19,38 +20,6 @@ export function useWorkOrRest() {
   }
 
   const waitTime = 3 * 1000
-
-  watch(closeWorkTime, () => {
-    console.warn(closeWorkTime.value, 'closeWorkTime')
-    window.ipcRenderer.send('set-store', 'closeWorkTime', closeWorkTime.value);
-    updStatus()
-  })
-
-  watch(startWorkTime, () => {
-    console.warn(startWorkTime.value, 'startWorkTime')
-    window.ipcRenderer.send('set-store', 'startWorkTime', startWorkTime.value);
-    updStatus()
-  })
-
-  watch(workTimeGap, () => {
-    console.warn(workTimeGap.value, 'workTimeGap')
-    window.ipcRenderer.send('set-store', 'workTimeGap', workTimeGap.value);
-  })
-
-  watch(restTimeGap, () => {
-    console.warn(restTimeGap.value, 'restTimeGap')
-    window.ipcRenderer.send('set-store', 'restTimeGap', restTimeGap.value);
-  })
-
-  watch(workTimeGapUnit, () => {
-    console.warn(workTimeGapUnit.value, 'workTimeGapUnit')
-    window.ipcRenderer.send('set-store', 'workTimeGapUnit', workTimeGapUnit.value);
-  })
-
-  watch(restTimeGapUnit, () => {
-    console.warn(restTimeGapUnit.value, 'restTimeGapUnit')
-    window.ipcRenderer.send('set-store', 'restTimeGapUnit', restTimeGapUnit.value);
-  })
 
   onMounted(() => {
     window.ipcRenderer.on('before-close', (e, data) => {
@@ -62,6 +31,7 @@ export function useWorkOrRest() {
     });
 
     window.ipcRenderer.on('close-rest', (e, data) => {
+      alert('结束休息')
       startForceWorkFn({ isUpdateStartTime: true })
     });
   })
@@ -72,100 +42,48 @@ export function useWorkOrRest() {
     window.ipcRenderer.removeAllListeners('close-rest');
   })
 
-  const nextWorkTime = computed(() => {
-    let next = 0
-    if (startWorkTime.value >= closeWorkTime.value) {
-      // 当前正在工作
-      next = Number(startWorkTime.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-    } else {
-      // 当前正在休息
-      next = Number(closeWorkTime.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value)
-    }
-    return new Date(Number(next)).toLocaleString('zh', {
-      hour12: false,
-    })
-  })
-
-  const nextRestTime = computed(() => {
-    let next = 0
-    if (startWorkTime.value >= closeWorkTime.value) {
-      // 当前正在工作
-      next = Number(startWorkTime.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value)
-    } else {
-      // 当前正在休息
-      next = Number(closeWorkTime.value) + Number(restTimeGap.value) * Number(restTimeGapUnit.value) + Number(workTimeGap.value) * Number(workTimeGapUnit.value)
-    }
-    return new Date(Number(next)).toLocaleString('zh', {
-      hour12: false,
-    })
-  })
-
-  function updStatus(updByStatus = '') {
-    // 通过status更新
-    if (updByStatus) {
-      return curStatus.value = updByStatus == 'work' ? {
-        label: '正在工作',
-        value: 'work',
-      } : updByStatus == 'rest' ? {
-        label: '正在休息',
-        value: 'rest',
-      } : {}
-    }
-    if (startWorkTime.value >= closeWorkTime.value) {
-      curStatus.value = {
-        label: '正在工作',
-        value: 'work',
-      }
-    } else {
-      curStatus.value = {
-        label: '正在休息',
-        value: 'rest',
-      }
-    }
-  }
-
   // 软件初始化
   function initFn() {
     // 上一次工作时间到现在时间的间隔，如果小于
     const currentTime = Date.now()
-    console.warn(curStatus.value, 'curStatus')
-    console.warn(currentTime - startWorkTime.value, workTimeGap.value * workTimeGapUnit.value, 'work')
-    console.warn(currentTime - closeWorkTime.value, restTimeGap.value * restTimeGapUnit.value, 'rest')
+    console.warn(curStatusC.value, 'curStatusC')
+    console.warn(currentTime - startWorkTimeC.value, workTimeGapC.value * workTimeGapUnitC.value, 'work')
+    console.warn(currentTime - closeWorkTimeC.value, restTimeGapC.value * restTimeGapUnitC.value, 'rest')
 
 
-    if (!curStatus.value || curStatus.value.value === '') {
+    if (!curStatusC.value || curStatusC.value.value === undefined) {
       // 第一次启动，开始工作
-      startForceWorkFn({ gap: workTimeGap.value * workTimeGapUnit.value, msg: '应用启动中，30s后您将开始进入工作状态。', notTimeout: true, msgShowTime: firstWaitTime, isInitApp: true })
+      startForceWorkFn({ gap: workTimeGapC.value * workTimeGapUnitC.value, msg: '应用启动中，30s后您将开始进入工作状态。', notTimeout: true, msgShowTime: firstWaitTime, isInitApp: true })
       console.warn('应用启动中，开始工作1')
       return;
     }
 
-    if (currentTime - startWorkTime.value < workTimeGap.value * workTimeGapUnit.value) {
-      startForceWorkFn({ gap: workTimeGap.value * workTimeGapUnit.value - (currentTime - startWorkTime.value), msg: '应用启动中，由于人为破坏应用运行机制，30s后您将开始进入工作状态。', notTimeout: false, msgShowTime: firstWaitTime })
+    if (currentTime - startWorkTimeC.value < workTimeGapC.value * workTimeGapUnitC.value) {
+      startForceWorkFn({ gap: workTimeGapC.value * workTimeGapUnitC.value - (currentTime - startWorkTimeC.value), msg: '应用启动中，由于人为破坏应用运行机制，30s后您将开始进入工作状态。', notTimeout: false, msgShowTime: firstWaitTime })
       console.warn('人为修改应用设置，继续工作1')
       return
     }
-    if (currentTime - closeWorkTime.value < restTimeGap.value * restTimeGapUnit.value) {
-      startRestFn({ gap: restTimeGap.value * restTimeGapUnit.value - (currentTime - closeWorkTime.value), msg: '应用启动中，由于人为破坏应用运行机制，您应当继续开始进入休息状态', notTimeout: true })
+    if (currentTime - closeWorkTimeC.value < restTimeGapC.value * restTimeGapUnitC.value) {
+      startRestFn({ gap: restTimeGapC.value * restTimeGapUnitC.value - (currentTime - closeWorkTimeC.value), msg: '应用启动中，由于人为破坏应用运行机制，您应当继续开始进入休息状态', notTimeout: true })
       console.warn('人为修改应用设置，继续休息1')
       return
     }
 
     // 第一次启动，开始工作2
     console.log('应用启动中，开始工作2')
-    startForceWorkFn({ gap: workTimeGap.value * workTimeGapUnit.value, msg: '应用启动中，上一个应用运行机制已结束，30s后您将开始进入工作状态。', notTimeout: false, msgShowTime: firstWaitTime, isInitApp: true })
+    startForceWorkFn({ gap: workTimeGapC.value * workTimeGapUnitC.value, msg: '应用启动中，上一个应用运行机制已结束，30s后您将开始进入工作状态。', notTimeout: false, msgShowTime: firstWaitTime, isInitApp: true })
     console.warn('应用启动中，开始工作2')
   }
 
   // 改动立刻生效
   function changeEffectFn() {
-    console.warn('改动立刻生效', curStatus.value, 1)
-    if (curStatus.value && curStatus.value.value === 'work') {
+    console.warn('改动立刻生效', curStatusC.value, 1)
+    if (curStatusC.value && curStatusC.value.value === 'work') {
       startWorkFn()
     }
-    if (curStatus.value && curStatus.value.value === 'rest') {
+    if (curStatusC.value && curStatusC.value.value === 'rest') {
       // 上一次工作结束时间开始计算
-      const diffDate = restTimeGap.value * restTimeGapUnit.value - (Date.now() - closeWorkTime.value)
+      const diffDate = restTimeGapC.value * restTimeGapUnitC.value - (Date.now() - closeWorkTimeC.value)
       startRestFn({ gap: diffDate })
     }
 
@@ -173,45 +91,53 @@ export function useWorkOrRest() {
   }
 
   function startWorkFn(gap?: number, msg?: string) {
-    if (curStatus.value.value === 'rest') {
+    if (curStatusC.value.value === 'rest') {
       appNotify('提示', '正在休息中');
       return
     }
-    startForceWorkFn({ gap: gap || (workTimeGap.value * workTimeGapUnit.value), msg })
+    startForceWorkFn({ gap: gap || (workTimeGapC.value * workTimeGapUnitC.value), msg })
   }
 
   function startForceWorkFn({ gap, msg, notTimeout, msgShowTime, isInitApp, isUpdateStartTime }: { gap?: number, msg?: string, notTimeout?: boolean, msgShowTime?: number, isInitApp?: boolean, isUpdateStartTime?: boolean } = {}) {
     if (startTimer.value) clearTimeout(startTimer.value);
-    console.warn(new Date(startWorkTime.value), 'startWorkTime')
+    console.warn(new Date(startWorkTimeC.value), 'startWorkTimeC')
     sysNotify('提示', msg || `${(msgShowTime || waitTime) / 1000}秒后开始进入工作状态`, '')
     appNotify('提示', msg || `${(msgShowTime || waitTime) / 1000}秒后开始进入工作状态`, msgShowTime);
-    console.warn(gap || (workTimeGap.value) * workTimeGapUnit.value, 'workTimeGapUnit 工作时间间隔')
+    console.warn(gap || (workTimeGapC.value) * workTimeGapUnitC.value, 'workTimeGapUnitC 工作时间间隔')
     if (!notTimeout) {
       startTimer.value = setTimeout(() => {
         // 有这个标志，代表首次启动应用
         if (isInitApp || isUpdateStartTime) {
-          startWorkTime.value = Date.now()
+          setStartWorkTime(Date.now())
+          setCurStatus()
         }
-        updStatus('work')
-        window.ipcRenderer.send('start-work', gap || (workTimeGap.value) * workTimeGapUnit.value);
+        setCurStatus({
+          label: '正在工作',
+          value: 'work',
+        })
+        window.ipcRenderer.send('start-work', gap || (workTimeGapC.value) * workTimeGapUnitC.value);
       }, msgShowTime || waitTime);
     } else {
       // 有这个标志，代表首次启动应用
       if (isInitApp || isUpdateStartTime) {
-        startWorkTime.value = Date.now()
+        setStartWorkTime(Date.now())
+        setCurStatus()
       }
-      updStatus('work')
-      window.ipcRenderer.send('start-work', gap || (workTimeGap.value) * workTimeGapUnit.value);
+      setCurStatus({
+        label: '正在工作',
+        value: 'work',
+      })
+      window.ipcRenderer.send('start-work', gap || (workTimeGapC.value) * workTimeGapUnitC.value);
     }
   }
 
   function forceWorkWithTimes() {
-    if (todayForceWorkTimes.value?.times > forceWorkTimes.value) {
+    if (todayForceWorkTimesC.value?.times > forceWorkTimesC.value) {
       appNotify('提示', '太累了，您不能再继续强制工作');
       sysNotify('提示', '太累了，您不能再继续强制工作', '');
       return
     }
-    setTodayForceWorkTimes(todayForceWorkTimes.value + 1)
+    setTodayForceWorkTimes(todayForceWorkTimesC.value + 1)
     startForceWorkFn()
   }
 
@@ -219,7 +145,7 @@ export function useWorkOrRest() {
     if (startTimer.value) clearTimeout(startTimer.value);
     sysNotify('提示', msg || '3秒后开始进入休息状态', '')
     appNotify('提示', msg || '3秒后开始进入休息状态');
-    console.warn(gap || (restTimeGap.value) * restTimeGapUnit.value, 'restTimeGapUnit 休息时间间隔')
+    console.warn(gap || (restTimeGapC.value) * restTimeGapUnitC.value, 'restTimeGapUnitC 休息时间间隔')
     // 判断当前时间是否在11:50-13:30之间
     let isNoonRestTime = false
     let noonRestTimeGap = 0
@@ -235,18 +161,26 @@ export function useWorkOrRest() {
       startTimer.value = setTimeout(() => {
         // 有这个标志，代表首次启动应用
         if (isUpdateCloseTime) {
-          closeWorkTime.value = Date.now()
+          setCloseWorkTime(Date.now())
+          setCurStatus()
         }
-        updStatus('rest')
-        window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
+        setCurStatus({
+          label: '正在休息',
+          value: 'rest',
+        })
+        window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGapC.value) * restTimeGapUnitC.value));
       }, waitTime);
     } else {
       // 有这个标志，代表首次启动应用
       if (isUpdateCloseTime) {
-        closeWorkTime.value = Date.now()
+        setCloseWorkTime(Date.now())
+        setCurStatus()
       }
-      updStatus('rest')
-      window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGap.value) * restTimeGapUnit.value));
+      setCurStatus({
+        label: '正在休息',
+        value: 'rest',
+      })
+      window.ipcRenderer.send('start-rest', isNoonRestTime ? noonRestTimeGap : (gap || (restTimeGapC.value) * restTimeGapUnitC.value));
     }
   }
 
@@ -257,14 +191,11 @@ export function useWorkOrRest() {
     forceWorkWithTimes,
     startRestFn,
     changeEffectFn,
-    workTimeGap,
-    restTimeGap,
-    workTimeGapUnit,
-    restTimeGapUnit,
-    closeWorkTime,
-    startWorkTime,
-    nextWorkTime,
-    nextRestTime,
-    curStatus,
+    workTimeGapC,
+    restTimeGapC,
+    workTimeGapUnitC,
+    restTimeGapUnitC,
+    closeWorkTimeC,
+    startWorkTimeC,
   }
 }

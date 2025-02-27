@@ -8,9 +8,10 @@ import useWorkOrResetStore from '@/store/useWorkOrReset'
 import { useWorkOrRest } from '@/hooks/useWorkOrReset';
 import useGlobalSetting from '@/store/useGlobalSetting';
 
-const { appBgColor, appInnerColor, forceLockMode } = storeToRefs(useGlobalSetting());
-const { curStatus } = storeToRefs(useGlobalSetting());
-const { startApp, nextRestTime, nextWorkTime } = useWorkOrRest(); 
+const { setAppBgColor, setAppInnerColor } = useGlobalSetting()
+const { appBgColorC, appInnerColorC, curStatusC } = storeToRefs(useGlobalSetting());
+const { nextRestTime, nextWorkTime } = storeToRefs((useWorkOrResetStore()))
+const { startApp } = useWorkOrRest();
 
 onMounted(() => {
   console.log(window.location.href)
@@ -19,30 +20,20 @@ onMounted(() => {
   }
   startApp();
 });
-console.log('appBgColor', appBgColor);
-let bgColor = ref(appBgColor)
-const innerColor = ref(appInnerColor)
+console.log('appBgColorC', appBgColorC);
+let bgColor = ref(appBgColorC)
+const innerColor = ref(appInnerColorC)
 
-watch(() => curStatus.value.value, (n) => {
-  console.log('curStatus', n);
+watch(() => curStatusC.value.value, (n) => {
+  console.log('curStatusC', n);
   if (n == 'rest') {
-    if (forceLockMode.value == '2') {
-      bgColor.value = '#000c18';
-      innerColor.value = '#000c18';
-    }
-    else {
-      bgColor.value = '#0077d7';
-      innerColor.value = '#0077d7';
-    }
-  } else {
-    bgColor.value = appBgColor.value;
-    innerColor.value = appInnerColor.value;
+    // TODO: 设置背景色
   }
 }, { immediate: true, deep: true })
 
 
-watch(appInnerColor, (n, o) => {
-  console.log('appInnerColor', n, o);
+watch(appInnerColorC, (n, o) => {
+  console.log('appInnerColorC', n, o);
 });
 
 document.title = electronConfig.productName;

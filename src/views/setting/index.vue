@@ -1,11 +1,11 @@
 <template>
-  <layout-vue>
+  <layout-vue isPadding>
     <template #top>
       <header-nav title="设置" @back="toHome"></header-nav>
     </template>
     <template #main>
       <el-form class="setting-form" label-width="108" label-position="left" :style="{
-        backgroundColor: appInnerColor,
+        // backgroundColor: appInnerColorCc,
       }">
         <el-form-item>
           <template #label>
@@ -13,8 +13,8 @@
           </template>
         </el-form-item>
         <el-form-item label="当前状态">
-          <div :class="['cur-status', curStatus.value === 'rest' ? 'cur-status-rest' : 'cur-status-work']">
-            {{ curStatus.label }}
+          <div :class="['cur-status', curStatusC.value === 'rest' ? 'cur-status-rest' : 'cur-status-work']">
+            {{ curStatusC.label }}
           </div>
         </el-form-item>
         <el-form-item label="下次工作时间">
@@ -58,14 +58,14 @@
           </template>
         </el-form-item>
         <el-form-item label="强制工作次数">
-          <el-radio-group v-model="forceWorkTimes" @change="changeForceWorkTimes">
+          <el-radio-group v-model="forceWorkTimesC" @change="changeForceWorkTimes">
             <el-radio v-for="i in 4" :key="i" :value="i - 1" border>{{ i - 1 }} 次</el-radio>
           </el-radio-group>
 
         </el-form-item>
         <el-form-item label="立刻强制工作">
           <el-button type="primary" @click="() => forceWorkWithTimes()">强制开始工作</el-button>
-          <span style="margin-left: 1em;">今日剩余 {{ forceWorkTimes - todayForceWorkTimes?.times }} 次</span>
+          <span style="margin-left: 1em;">今日剩余 {{ forceWorkTimesC - todayForceWorkTimesC?.times }} 次</span>
         </el-form-item>
 
         <!-- 分割线 -->
@@ -76,31 +76,17 @@
           </template>
         </el-form-item>
         <el-form-item label="应用背景颜色">
-          <el-color-picker v-model="appBgColor" show-alpha @change="changeAppBgColor" /><span>{{ appBgColor }}</span>
+          <el-color-picker v-model="appBgColorCc" show-alpha @change="changeAppBgColor" /><span>{{ appBgColorCc
+            }}</span>
         </el-form-item>
         <el-form-item label="页面背景颜色">
-          <el-color-picker v-model="appInnerColor" show-alpha @change="changeAppInnerColor" /><span>{{ appInnerColor
+          <el-color-picker v-model="appInnerColorCc" show-alpha @change="changeAppInnerColor" /><span>{{ appInnerColorCc
           }}</span>
         </el-form-item>
 
         <!-- 分割线 -->
         <el-divider></el-divider>
-        <el-form-item>
-          <template #label>
-            <div class="setting-title">选项设置</div>
-          </template>
-        </el-form-item>
-        <el-form-item label="主页模式" class="mode-wrapper">
-          <el-select v-model="activeHomeModeOps" value-key="value" placeholder="Select" style="width: 115px">
-            <el-option v-for="item in homeModeOps" :key="item.value" :label="item.label" :value="item" />
-          </el-select>
-          <div class="mode-ops">
-            <el-form-item class="mode-item" v-for="(item, key, index) in activeHomeModeOps" :label="key">
-              <!-- <span class="mode-label">{{ key }}</span> -->
-              <el-input v-model="activeHomeModeOps[key]" placeholder="请输入" />
-            </el-form-item>
-          </div>
-        </el-form-item>
+        <homeMode />
 
         <!-- 分割线 -->
         <el-divider></el-divider>
@@ -121,17 +107,17 @@
           <el-button type="primary" @click="clearStore">清空数据</el-button>
         </el-form-item>
         <el-form-item label="全局字体设置">
-          <el-select v-model="globalFont" placeholder="请选择" style="width: 300px" @change="setGlobalFont">
-            <el-option v-for="value in globalFontOps" :key="value.value" :label="value.label" :value="value.value" />
+          <el-select v-model="globalFontC" placeholder="请选择" style="width: 300px" @change="setGlobalFont">
+            <el-option v-for="value in globalFontOpsC" :key="value.value" :label="value.label" :value="value.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="休息背景设置">
-          <el-select v-model="restBgColor" placeholder="请选择" style="width: 300px" @change="setForceLockMode">
-            <el-option v-for="value in homeModeOps" :key="value.value" :label="value.label" :value="value.value" />
+          <el-select v-model="restBgColor" placeholder="请选择" style="width: 300px" @change="setHomeMode">
+            <el-option v-for="value in homeModeOpsC" :key="value.value" :label="value.label" :value="value.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="开机自启动">
-          <el-switch v-model="isStartup" inline-prompt active-text="是" inactive-text="否" @change="changeIsStartup" />
+          <el-switch v-model="isStartupC" inline-prompt active-text="是" inactive-text="否" @change="changeIsStartup" />
         </el-form-item>
         <el-form-item label="退出应用">
           <el-button type="primary" @click="quitApp">点击退出应用</el-button>
@@ -146,7 +132,9 @@
 import { ref, reactive, watch, computed, toRaw } from 'vue';
 import { useRouter } from 'vue-router';
 
+import LayoutVue from '@/components/layout.vue';
 import HeaderNav from '@/components/header.vue';
+import homeMode from '@/views/setting/homeMode.vue';
 import useWorkOrResetStore from '@/store/useWorkOrReset'
 import { useWorkOrRest } from '@/hooks/useWorkOrReset';
 import useClearStore from '@/hooks/useClearStore';
@@ -154,7 +142,6 @@ import useGlobalSetting from '@/store/useGlobalSetting';
 import { storeToRefs } from 'pinia';
 import { timeUnit } from '@/utils/time';
 import confirmDialog from '@/utils/confirmDialog';
-import LayoutVue from '@/components/layout.vue';
 
 const router = useRouter();
 
@@ -164,8 +151,6 @@ const {
   startRestFn,
   changeEffectFn,
   forceWorkWithTimes,
-  nextRestTime,
-  nextWorkTime,
 } = useWorkOrRest();
 const {
   workTimeGap,
@@ -174,16 +159,31 @@ const {
   restTimeGapUnit,
   startWorkTime,
   closeWorkTime,
+  nextRestTime,
+  nextWorkTime,
 } = storeToRefs(useWorkOrResetStore());
-const { setForceWorkTimes, setAppBgColor, setAppInnerColor, setIsStartup, setForceLockMode, setGlobalFont, curStatus } = useGlobalSetting();
-const { isStartup, forceWorkTimes, todayForceWorkTimes, appBgColor, appInnerColor, globalFont, globalFontOps, homeModeOps } = storeToRefs(useGlobalSetting());
+const { setForceWorkTimes, setAppBgColor, setAppInnerColor, setIsStartup, setHomeMode, setGlobalFont, setHomeModeOps } = useGlobalSetting();
+const { isStartupC, forceWorkTimesC, todayForceWorkTimesC, appBgColorC, appInnerColorC, globalFontC, globalFontOpsC, homeModeOpsC, curStatusC } = storeToRefs(useGlobalSetting());
 
-const activeHomeModeOps = ref(toRaw(homeModeOps.value[0]))
+const appBgColorCc = ref(JSON.parse(JSON.stringify(appBgColorC.value)))
+const appInnerColorCc = ref(JSON.parse(JSON.stringify(appInnerColorC.value)))
+const homeModeOpsCc = ref(JSON.parse(JSON.stringify(homeModeOpsC.value)))
+const activeHomeModeOps = ref(toRaw(homeModeOpsCc.value[0]))
 
-const restBgColor = ref(window.ipcRenderer.sendSync('get-store', 'forceLockMode') || homeModeOps.value[0].value);
-console.log(setForceLockMode, 'setForceLockMode',)
+watch(() => homeModeOpsC.value, (n) => {
+  homeModeOpsCc.value = JSON.parse(JSON.stringify(n));
+}, {
+  immediate: true,
+  deep: true,
+})
 
-setForceLockMode(restBgColor.value)
+function changeModeOps() {
+  const findIndex = homeModeOpsCc.value.findIndex((item: any) => item.value === activeHomeModeOps.value.value);
+  homeModeOpsCc.value.splice(findIndex, 1, activeHomeModeOps.value);
+  setHomeModeOps(homeModeOpsCc.value);
+}
+
+const restBgColor = ref();
 
 function quitApp() {
   confirmDialog.open('确定要退出应用吗？', () => {
@@ -245,10 +245,9 @@ function toHome() {
 
 .setting-form {
   width: 100%;
-  height: 100%;
   box-sizing: border-box;
   padding: 12px;
-  background-color: #8c8c8c;
+  background-color: #ffffff;
 }
 
 // 主页模式
@@ -258,13 +257,16 @@ function toHome() {
     align-items: flex-start;
   }
 }
+
 .mode-ops {
   width: 100%;
   padding-top: 12px;
+
   .mode-item {
     display: flex;
     margin-bottom: 10px;
   }
+
   .mode-label {
     width: 150px;
   }

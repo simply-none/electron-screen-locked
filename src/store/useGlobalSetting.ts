@@ -1,8 +1,9 @@
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import type { Ref } from "vue";
-import { defineStore } from "pinia";
+import { defineStore, storeToRefs } from "pinia";
 import { getStore, sendSync, setStore } from "../utils/common";
 import moment from "moment";
+import useWorkOrRestStore from "@/store/useWorkOrReset";
 
 type defaultField = {
   field: string,
@@ -10,19 +11,38 @@ type defaultField = {
   map: Ref<any>,
 }
 
+export type StatusMode = 'work' | 'rest' | 'screen';
+
 interface Status {
+  label?: string;
+  value?: StatusMode
+}
+
+export interface CommonOps {
   label?: string;
   value?: string;
 }
 
-type modeOps =  {
+export type CommonObj = {
   [key: string]: any
 }
 
 export default defineStore("global-setting", () => {
+  const { startWorkTimeC, closeWorkTimeC } = storeToRefs(useWorkOrRestStore())
   // 当前的状态
   const curStatus = ref<Status>({})
-  function updateCurStatus(status: Status) {
+  const curStatusC = computed(() => curStatus.value)
+  function setCurStatus(status?: Status) {
+    if (!status) {
+      curStatus.value = startWorkTimeC.value >= closeWorkTimeC.value ? {
+        label: '正在工作',
+        value: 'work',
+      } : {
+        label: '正在休息',
+        value: 'rest',
+      }
+      return true;
+    }
     curStatus.value = status;
     setStore("curStatus", status)
   }
@@ -30,6 +50,8 @@ export default defineStore("global-setting", () => {
   // 强制解锁屏幕限制（即可以玩电脑）
   const forceWorkTimes = ref()
   const todayForceWorkTimes = ref()
+  const forceWorkTimesC = computed(() => forceWorkTimes.value)
+  const todayForceWorkTimesC = computed(() => todayForceWorkTimes.value)
 
   function setForceWorkTimes(value: number) {
     forceWorkTimes.value = value;
@@ -47,6 +69,7 @@ export default defineStore("global-setting", () => {
 
   // 是否开机启动
   const isStartup = ref()
+  const isStartupC = computed(() => isStartup.value)
 
   function setIsStartup(value: boolean) {
     isStartup.value = value;
@@ -61,7 +84,11 @@ export default defineStore("global-setting", () => {
   const appBgColor = ref()
   // 应用全局字体
   const globalFont = ref()
-  const globalFontOps = ref<Status[]>([])
+  const globalFontOps = ref<CommonOps[]>([])
+  const appInnerColorC = computed(() => appInnerColor.value)
+  const appBgColorC = computed(() => appBgColor.value)
+  const globalFontC = computed(() => globalFont.value)
+  const globalFontOpsC = computed(() => globalFontOps.value)
 
   function setAppInnerColor(value: string) {
     appInnerColor.value = value;
@@ -79,23 +106,30 @@ export default defineStore("global-setting", () => {
     document.documentElement.style.setProperty('--jianli-global-font', value)
   }
 
-  function setGlobalFontOps(value: Status[]) {
+  function setGlobalFontOps(value: CommonOps[]) {
     globalFontOps.value = value;
+    console.log(value, 'value')
     setStore("globalFontOps", value);
   }
 
   // 应用强制锁定（即休息时）设置存储思路：
   // 1. 包含多套方案
   // 2. 每套方案包含一种或多种属性
-  const forceLockMode = ref()
-  const homeModeOps = ref<modeOps[]>([])
+  const homeMode = ref<Record<StatusMode, CommonObj>>({
+    work: {},
+    rest: {},
+    screen: {},
+  })
+  const homeModeOps = ref<CommonObj[]>([])
+  const homeModeC = computed(() => homeMode.value)
+  const homeModeOpsC = computed(() => homeModeOps.value)
 
-  function setForceLockMode(value: string) {
-    forceLockMode.value = value;
-    setStore("forceLockMode", value);
+  function setHomeMode(value: Record<StatusMode, CommonObj>) {
+    homeMode.value = value;
+    setStore("homeMode", value);
   }
 
-  function setHomeModeOps(value: modeOps[]) {
+  function setHomeModeOps(value: CommonObj[]) {
     homeModeOps.value = value;
     setStore("homeModeOps", value);
   }
@@ -109,7 +143,6 @@ export default defineStore("global-setting", () => {
     // 数字值变量
     const numberVars = [
       { field: 'forceWorkTimes', default: 3, map: forceWorkTimes },
-      { field: 'forceLockMode', default: 1, map: forceLockMode },
     ]
     // 字符串值变量
     const stringVars: defaultField[] = []
@@ -121,6 +154,30 @@ export default defineStore("global-setting", () => {
     // 字体值变量
     const fontVars = [
       { field: 'globalFont', default: '', map: globalFont },
+    ]
+
+    const originHomeModeOps = [
+      {
+        label: "透明诗词板",
+        value: "0",
+        primaryColor: "#ffffff",
+        secondaryColor: "#000000",
+        opacity: 0.8,
+      },
+      {
+        label: "模拟Windows更新",
+        value: "1",
+        primaryColor: "#000000",
+        secondaryColor: "#ffffff",
+        opacity: 0.8,
+      },
+      {
+        label: "vscode代码背景",
+        value: "2",
+        primaryColor: "#000000",
+        secondaryColor: "#ffffff",
+        opacity: 0.8,
+      },
     ]
     // 对象值变量
     const objectVars = [
@@ -148,29 +205,14 @@ export default defineStore("global-setting", () => {
         ], map: globalFontOps
       },
       {
-        field: 'homeModeOps', default: [
-          {
-            label: "透明诗词板",
-            value: "0", 
-            primaryColor: "#ffffff",
-            secondaryColor: "#000000",
-            opacity: 0.8,
-          },
-          {
-            label: "模拟Windows更新",
-            value: "1",
-            primaryColor: "#000000",
-            secondaryColor: "#ffffff",
-            opacity: 0.8,
-          },
-          {
-            label: "vscode代码背景",
-            value: "2",
-            primaryColor: "#000000",
-            secondaryColor: "#ffffff",
-            opacity: 0.8,
-          },
-        ], map: homeModeOps
+        field: 'homeMode', default: {
+          work: originHomeModeOps[0],
+          rest: originHomeModeOps[0],
+          screen: originHomeModeOps[0],
+        }, map: homeMode
+      },
+      {
+        field: 'homeModeOps', default: originHomeModeOps, map: homeModeOps
       },
 
     ]
@@ -222,10 +264,10 @@ export default defineStore("global-setting", () => {
     appBgColor,
     globalFont,
     globalFontOps,
-    forceLockMode,
+    homeMode,
     homeModeOps,
     // 方法
-    updateCurStatus,
+    setCurStatus,
     setForceWorkTimes,
     setTodayForceWorkTimes,
     setIsStartup,
@@ -233,8 +275,20 @@ export default defineStore("global-setting", () => {
     setAppBgColor,
     setGlobalFont,
     setGlobalFontOps,
-    setForceLockMode,
+    setHomeMode,
     setHomeModeOps,
-
+    // getters
+    curStatusC,
+    forceWorkTimesC,
+    todayForceWorkTimesC,
+    isStartupC,
+    appInnerColorC,
+    appBgColorC,
+    globalFontC,
+    globalFontOpsC,
+    homeModeC,
+    homeModeOpsC,
+    // 其他 
+    $reset,
   };
 });
