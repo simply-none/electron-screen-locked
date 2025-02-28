@@ -1,6 +1,7 @@
 <template>
   <div class="layout" :style="{
     padding: props.isPadding ? '12px' : '0px',
+    backgroundColor: props.isPadding ? (props.paddingColor || '#ffffff') : 'unset',
   }">
     <div class="top" v-if="$slots.top" ref="top">
       <slot name="top">
@@ -37,6 +38,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  paddingColor: {
+    type: String,
+    default: '#ffffff',
+  }
 });
 const top = ref<HTMLElement>();
 const bottom = ref<HTMLElement>();

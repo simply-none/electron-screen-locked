@@ -64,7 +64,7 @@
 
         </el-form-item>
         <el-form-item label="立刻强制工作">
-          <el-button type="primary" @click="() => forceWorkWithTimes()">强制开始工作</el-button>
+          <el-button type="primary" @click="() => forceWorkWithTimes({ isUpdateStartTime: true })">强制开始工作</el-button>
           <span style="margin-left: 1em;">今日剩余 {{ forceWorkTimesC - todayForceWorkTimesC?.times }} 次</span>
         </el-form-item>
 
@@ -101,7 +101,7 @@
 
         </el-form-item>
         <el-form-item label="是否开始休息">
-          <el-button type="primary" @click="() => startRestFn()">开始休息</el-button>
+          <el-button type="primary" @click="() => startRestFn({ isUpdateCloseTime: true})">开始休息</el-button>
         </el-form-item>
         <el-form-item label="清空系统数据">
           <el-button type="primary" @click="clearStore">清空数据</el-button>

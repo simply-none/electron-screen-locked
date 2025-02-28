@@ -139,14 +139,6 @@ async function createWindow() {
   });
   ipcMain.on("start-work", (e, workTimeGap: number) => {
     hideApp()
-    // if (timer) {
-    //   clearTimeout(timer)
-    // }
-    // timer = setTimeout(() => {
-    //   // 工作结束 强制休息
-    //   win?.webContents.send('close-work')
-    // }, workTimeGap)
-    // createOtherWindow('small')
     createJob({
       win, msgName: 'close-work', time: workTimeGap, onTick: () => {
         // 打开第二窗口
@@ -156,14 +148,6 @@ async function createWindow() {
   });
   ipcMain.on("start-rest", (e, restTimeGap: number) => {
     focusAppToTop()
-    // if (timer) {
-    //   clearTimeout(timer)
-    // }
-    // timer = setTimeout(() => {
-    //   // 休息完之后可以工作操作电脑了
-    //   hideApp()
-    //   win?.webContents.send('close-rest')
-    // }, restTimeGap)
     createJob({
       win, msgName: 'close-rest', time: restTimeGap, onTick: () => {
         hideApp()

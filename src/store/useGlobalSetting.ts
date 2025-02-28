@@ -9,6 +9,7 @@ type defaultField = {
   field: string,
   default: any,
   map: Ref<any>,
+  initFn?: Function,
 }
 
 export type StatusMode = 'work' | 'rest' | 'screen';
@@ -59,6 +60,7 @@ export default defineStore("global-setting", () => {
   }
 
   function setTodayForceWorkTimes(value: number) {
+    if (typeof value !== 'number') value = 0;
     const t = {
       today: moment().format('YYYY/MM/DD'),
       times: value,
@@ -193,7 +195,8 @@ export default defineStore("global-setting", () => {
         field: 'todayForceWorkTimes', default: {
           today: moment().format('YYYY/MM/DD'),
           times: 0,
-        }, map: todayForceWorkTimes
+        }, map: todayForceWorkTimes,
+        initFn: initTodayForceWorkTimes,
       },
       {
         field: 'globalFontOps', default: [
@@ -230,8 +233,26 @@ export default defineStore("global-setting", () => {
     // 默认值赋值
     allVars.forEach((item) => {
       const { field, default: defaultValue, map } = item;
-      assignDefaultValue(field, defaultValue, map);
+      if (!item.initFn) {
+        assignDefaultValue(field, defaultValue, map);
+      } else {
+        item.initFn(field, defaultValue, map)
+      }
+      
     })
+  }
+
+  // 当天时间判断，初始化
+  function initTodayForceWorkTimes<T>(key: string, defaultValue: T, map: Ref<any>): void {
+    const storeValue = getStore(key);
+    const today = moment().format('YYYY/MM/DD');
+
+    if (storeValue == undefined || storeValue == null || today !== storeValue.today) {
+      map.value = defaultValue
+      setStore(key, defaultValue);
+    } else {
+      map.value = storeValue
+    }
   }
 
   // 变量默认值赋值操作：

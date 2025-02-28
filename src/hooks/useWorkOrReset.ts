@@ -131,14 +131,14 @@ export function useWorkOrRest() {
     }
   }
 
-  function forceWorkWithTimes() {
+  function forceWorkWithTimes({ isUpdateStartTime }: { isUpdateStartTime?: boolean } = {}) {
     if (todayForceWorkTimesC.value?.times > forceWorkTimesC.value) {
       appNotify('提示', '太累了，您不能再继续强制工作');
       sysNotify('提示', '太累了，您不能再继续强制工作', '');
       return
     }
-    setTodayForceWorkTimes(todayForceWorkTimesC.value + 1)
-    startForceWorkFn()
+    setTodayForceWorkTimes(todayForceWorkTimesC.value.times + 1)
+    startForceWorkFn({ isUpdateStartTime })
   }
 
   function startRestFn({ gap, msg, notTimeout, isUpdateCloseTime }: { gap?: number, msg?: string, notTimeout?: boolean, isUpdateCloseTime?: boolean } = {}) {
