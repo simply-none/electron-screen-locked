@@ -1,6 +1,6 @@
 {
   "name": "jianli-app",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "main": "dist-electron/main/index.js",
   "description": "工作时强制休息，保护眼睛，守护健康！",
   "author": "JadeQiu <xxx@xxx.com>",
