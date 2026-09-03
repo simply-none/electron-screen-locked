@@ -45,6 +45,7 @@ import AppDialog from '@/components/AppDialog.vue';
 import LucideIcon from '@/components/LucideIcon.vue';
 import useTwoFactor from '@/store/useTwoFactor';
 import { twoFactorApi } from '../api/twoFactorApi';
+import { fileNotify } from '@/utils/fileNotify';
 
 const store = useTwoFactor();
 const visible = defineModel<boolean>({ default: false });
@@ -67,7 +68,8 @@ async function doExport() {
   const ok = await store.exportVault(filePath.value, useNewPass.value ? pass.value : undefined);
   exporting.value = false;
   if (ok) {
-    ElMessage.success('已导出保险库文件');
+    // 保留用户选择的安全位置，仅把成功提示改为可点击定位的 fileNotify
+    fileNotify({ title: '已导出保险库文件', filePath: filePath.value });
     visible.value = false;
   } else {
     error.value = store.error || '导出失败';

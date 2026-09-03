@@ -41,12 +41,12 @@ import AppDialog from '@/components/AppDialog.vue';
 import LucideIcon from '@/components/LucideIcon.vue';
 import QrCodeView from './QrCodeView.vue';
 import {
-  saveQrImage,
   copyQrImage,
   saveQrText,
   buildQrFileName,
 } from '@/utils/qrcode';
 import { fileNotify } from '@/utils/fileNotify';
+import { exportBufferToCache } from '@/utils/exportToFile';
 import type { QrStyleOptions } from '@/utils/qrcode';
 
 const props = withDefaults(
@@ -83,16 +83,19 @@ async function onDownload() {
     ElMessage.warning('二维码尚未生成');
     return;
   }
-  const res = await saveQrImage({
-    dataUrl,
-    defaultName: buildQrFileName(props.content || props.defaultName),
+  const base64 = dataUrl.split(',')[1];
+  if (!base64) {
+    ElMessage.error('二维码数据无效');
+    return;
+  }
+  // 统一导出规范：直写缓存目录、不弹保存框，成功用 fileNotify 提示
+  const res = exportBufferToCache(base64, `${buildQrFileName(props.content || props.defaultName)}.png`, {
+    title: '二维码已保存',
   });
-  if (res?.canceled) return;
-  if (res?.ok) {
-    fileNotify({ title: '二维码已保存', filePath: res.path });
+  if (res.success) {
     emit('saved');
   } else {
-    ElMessage.error('保存失败：' + (res?.error || '未知错误'));
+    ElMessage.error('保存失败：' + (res.message || '未知错误'));
   }
 }
 

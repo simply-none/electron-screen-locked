@@ -33,17 +33,17 @@
 
       <div class="opt-row">
         <span class="lbl">输出目录</span>
-        <el-input :model-value="outDir" readonly placeholder="点击选择输出目录" @click="pickDir">
+        <el-input :model-value="outDir" readonly placeholder="缓存目录（导出后可在提示中打开）">
           <template #suffix>
             <LucideIcon name="FolderOpen" :size="15" class="ficon" />
           </template>
         </el-input>
       </div>
 
-      <p class="subdir-hint">将自动生成「{{ file ? file.name.replace(/\.pdf$/i, '') : '文件名' }}-导出图片-时间」子目录存放图片</p>
+      <p class="subdir-hint">将自动生成「{{ file ? file.name.replace(/\.pdf$/i, '') : '文件名' }}-导出图片-时间」子目录存放图片（位于缓存目录）</p>
 
       <div class="actions">
-        <el-button type="primary" :loading="loading" :disabled="!outDir" @click="doExport">
+        <el-button type="primary" :loading="loading" :disabled="!file" @click="doExport">
           导出图片
         </el-button>
         <span v-if="progress" class="tip">{{ progress }}</span>
@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onBeforeUnmount } from 'vue';
+import { ref, computed, onBeforeUnmount } from 'vue';
 import { ElMessage } from 'element-plus';
 import LucideIcon from '@/components/LucideIcon.vue';
 import FileDropZone from './FileDropZone.vue';
@@ -67,14 +67,18 @@ import { rangeTagsToIndices } from '../utils/pageRange';
 import { loadPdf, renderPageToImage } from '../composables/usePdfjs';
 import { usePdfTools } from '../store/usePdfTools';
 import type { PdfFileItem, PdfActionResult } from '../types';
+import { fileNotify } from '@/utils/fileNotify';
+import useCacheSet from '@/store/useCacheSet';
 
 const store = usePdfTools();
+const cacheSet = useCacheSet();
 const file = ref<PdfFileItem | null>(null);
 const pageCount = ref(0);
 const format = ref<'png' | 'jpg'>('png');
 const scale = ref<number>(1.5);
 const rangeTags = ref<string[]>([]);
-const outDir = ref('');
+// 统一导出规范：默认直写缓存目录，不弹目录选择框
+const outDir = computed(() => cacheSet.fileCachePathC.value || '');
 const result = ref<PdfActionResult | null>(null);
 const progress = ref('');
 const loading = ref(false);
@@ -127,11 +131,6 @@ async function onSelect(paths: string[]): Promise<void> {
   }
 }
 
-async function pickDir(): Promise<void> {
-  const res = await pdfApi.pickDir();
-  if (res.success && res.dir) outDir.value = res.dir;
-}
-
 async function doExport(): Promise<void> {
   result.value = null;
   if (!file.value || !outDir.value) return;
@@ -166,7 +165,11 @@ async function doExport(): Promise<void> {
     const w = await pdfApi.writeFiles(subDir, files);
     // 写入 outputPath（子目录）以便结果条可直接点击打开目录
     result.value = { success: w.success, count: w.count, outputPath: w.success ? subDir : undefined };
-    if (w.success) store.pushOutput(subDir);
+    if (w.success) {
+      store.pushOutput(subDir);
+      // 统一导出规范：成功提示用 fileNotify（蓝色可点击路径，点击在资源管理器打开）
+      fileNotify({ title: 'PDF 图片已导出', filePath: subDir });
+    }
   } catch (e) {
     result.value = { success: false, error: String(e) };
   } finally {

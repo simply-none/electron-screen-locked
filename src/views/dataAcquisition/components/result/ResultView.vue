@@ -95,7 +95,7 @@
  * 动态列表格（列取自记录键并集）与 JSON 双视图，分页展示，
  * 支持 JSON 导出（成功提示含文件链接，点击定位文件位置）。
  */
-import { ref, computed, watch, h } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportRecords } from '../../composables/useHistory'
 
@@ -220,39 +220,14 @@ function formatCell(value: any): string {
 }
 
 /**
- * 导出当前结果为 JSON 文件，成功提示展示文件链接（点击定位到文件位置）
+ * 导出当前结果为 JSON 文件。
+ * 统一导出工具 exportTextToCache 已内部分步：直写缓存目录、不弹保存框，
+ * 成功时通过 fileNotify 展示蓝色可点击路径（点击定位文件）。这里仅处理失败提示。
  */
 async function onExport(): Promise<void> {
   const saved = await exportRecords(props.records, props.exportName || '采集结果')
-  if (saved) {
-    ElMessage({
-      type: 'success',
-      duration: 5000,
-      message: h('span', { class: 'export-tip' }, [
-        '已导出：',
-        h(
-          'a',
-          {
-            class: 'export-link',
-            title: '在文件管理器中显示',
-            onClick: () => revealFile(saved),
-          },
-          saved.split(/[\\/]/).pop()
-        ),
-      ]),
-    })
-  }
-}
-
-/**
- * 在系统文件管理器中定位导出的文件
- * @param filePath 文件绝对路径
- */
-async function revealFile(filePath: string): Promise<void> {
-  const ipc: any = (window as any).ipcRenderer
-  const res = await ipc.handlePromise('scraper:reveal-file', filePath)
-  if (res && res.success === false) {
-    ElMessage.warning(res.error || '无法定位文件')
+  if (!saved) {
+    ElMessage.error('导出失败')
   }
 }
 </script>

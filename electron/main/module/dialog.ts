@@ -825,6 +825,31 @@ export function exportTextToCache(
   }
 }
 
+/**
+ * 导出二进制（base64）到缓存目录，不弹保存框。
+ * 目录优先级：入参 dir → electron-store 的 fileCachePath → 用户文档目录。
+ * @param base64   二进制数据（base64 字符串）
+ * @param filename 文件名（不含目录）
+ * @param dir      可选，指定缓存目录；缺省时回退到设置项/文档目录
+ * @returns { success, path?, message? }
+ */
+export function exportBufferToCache(
+  base64: string,
+  filename: string,
+  dir?: string
+): { success: boolean; path?: string; message?: string } {
+  try {
+    const targetDir =
+      dir || (store as ElectronStoreLike).get?.("fileCachePath") || app.getPath("documents");
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    const fullPath = path.resolve(targetDir, filename);
+    fs.writeFileSync(fullPath, Buffer.from(base64, "base64"));
+    return { success: true, path: fullPath };
+  } catch (err: any) {
+    return { success: false, message: err?.message || String(err) };
+  }
+}
+
 export function openFileInAssetsManager(filePath: string) {
   const fullPath = filePath.replace(/\//g, '\\');
   if (process.platform === 'win32') {
@@ -898,6 +923,9 @@ export function initFile() {
   // 导出纯文本（Markdown 等）到缓存目录，不弹保存框，返回完整路径
   ipcMain.on("export-text-to-cache", (e, { text, filename, dir }) => {
     e.returnValue = exportTextToCache(text, filename, dir);
+  });
+  ipcMain.on("export-buffer-to-cache", (e, { base64, filename, dir }) => {
+    e.returnValue = exportBufferToCache(base64, filename, dir);
   });
 
   ipcMain.on("open-file-in-assets-manager", (e, { path }) => {

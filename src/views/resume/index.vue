@@ -126,9 +126,12 @@ import { createMockResumeData } from './mock'
 import { defaultLayoutConfig, createCustomModuleStyle } from './engine/defaultConfig'
 import { buildPaginatedHtml } from './utils/paginate'
 import type { ResumeData, ResumeRecord, ResumeLayoutConfig, CustomSectionData } from './types'
+import { fileNotify } from '@/utils/fileNotify'
+import useCacheSet from '@/store/useCacheSet'
 
 /** IPC 句柄 */
 const ipc: any = (window as any).ipcRenderer
+const { fileCachePathC } = useCacheSet()
 
 /** 全部简历记录（按更新时间倒序） */
 const records = ref<ResumeRecord[]>([])
@@ -549,23 +552,16 @@ async function handleExport() {
     // 导出 HTML 经离屏 iframe 分页切分（与预览同一套逻辑），PDF 每页即一张 .rfs-page
     const rawHtml = currentTemplate.value.render(localData.value, layoutConfig.value)
     const html = await buildPaginatedHtml(rawHtml, { innerSplit: innerSplit.value })
+    // 统一导出规范：直写缓存目录、不弹保存框，成功用 fileNotify 提示（蓝色可点击路径）
     const res = await ipc.invoke('resume:export-pdf', {
       html,
       fileName: buildExportFileName(),
+      dir: fileCachePathC.value,
     })
     if (res && res.ok) {
-      // 提示消息可点击打开文件所在文件夹，持续 5 秒
-      ElMessage({
-        message: `已导出：${res.path}（点击打开所在文件夹）`,
-        type: 'success',
-        duration: 5000,
-        showClose: true,
-        onClick: () => {
-          ipc.invoke('resume:reveal-file', { path: res.path })
-        },
-      } as any)
+      fileNotify({ title: '简历 PDF 已导出', filePath: res.path })
     } else if (res && res.canceled) {
-      // 用户取消保存对话框，不提示
+      // 用户取消（仅在未传 dir 走保存对话框时出现），不提示
     } else {
       ElMessage.error(`导出失败：${(res && res.error) || '未知错误'}`)
     }

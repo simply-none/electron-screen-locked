@@ -131,6 +131,7 @@ import { computeDiff, buildHunks, createStandardPatch, applyStandardPatch } from
 import { calculateStats, isJson, formatJson as fmtJson, debounce } from './utils';
 import type { DiffAlgorithm, WhitespaceMode, NormalizeOptions } from './utils';
 import type { DiffItem, DiffHunk } from './patcher';
+import { exportTextToCache } from '@/utils/exportToFile';
 
 // ============== 响应式状态 ==============
 const leftText = ref('');
@@ -301,21 +302,15 @@ function onPatchApplyResult(side: 'left' | 'right', text: string) {
   else rightText.value = text;
 }
 
-/** 导出标准 patch */
+/** 导出标准 patch：统一导出工具直写缓存目录（不弹保存框，成功用 fileNotify 提示） */
 function exportPatch() {
   const patch = createStandardPatch('A.txt', 'B.txt', leftText.value, rightText.value, 3);
   if (!patch.trim() || hunks.value.length === 0) {
     ElMessage.info('两边文本完全一致，没有可导出的 patch');
     return;
   }
-  const blob = new Blob([patch], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `diff-${Date.now()}.patch`;
-  a.click();
-  URL.revokeObjectURL(url);
-  ElMessage.success('Patch 已下载');
+  const res = exportTextToCache(patch, `diff-${Date.now()}.patch`, { title: 'Patch 已导出' });
+  if (!res.success) ElMessage.error('Patch 导出失败');
 }
 
 /** 读取文件 */

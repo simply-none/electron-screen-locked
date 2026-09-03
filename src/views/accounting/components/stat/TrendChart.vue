@@ -28,6 +28,7 @@ import * as echarts from 'echarts'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import LucideIcon from '@/components/LucideIcon.vue'
+import { exportTextToCache } from '@/utils/exportToFile'
 import useAccounting from '@/store/useAccounting'
 import useThemeStore from '@/store/useTheme'
 import { THEME_COLORS } from '@/utils/chartTheme'
@@ -205,9 +206,8 @@ function buildReportCsv(): string {
 }
 
 /**
- * 导出报表：弹保存对话框写入 CSV
- *
- * @throws IPC 失败时 ElMessage 提示，不抛出
+ * 导出报表：走统一导出工具 exportTextToCache 直写缓存目录（不弹保存对话框）。
+ * 成功提示由工具内部用 fileNotify 展示（蓝色可点击路径）；失败在此兜底提示。
  */
 async function exportReport() {
   exporting.value = true
@@ -215,12 +215,8 @@ async function exportReport() {
     const csv = buildReportCsv()
     const now = new Date()
     const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
-    const res = await window.ipcRenderer.handlePromise('net-request:save-file', {
-      title: '导出收支趋势报表',
-      defaultName: `记账收支趋势报表_${stamp}.csv`,
-      text: csv,
-    })
-    if (res?.success && res.path) ElMessage.success(`报表已导出：${res.path}`)
+    const res = exportTextToCache(csv, `记账收支趋势报表_${stamp}.csv`, { title: '报表已导出' })
+    if (!res.success) ElMessage.error('报表导出失败')
   } catch {
     ElMessage.error('报表导出失败')
   } finally {

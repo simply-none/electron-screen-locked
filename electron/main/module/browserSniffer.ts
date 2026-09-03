@@ -337,15 +337,15 @@ export function initBrowserSniffer() {
     }
   );
 
-  // 导出资源链接清单（TXT，一行一个 URL，写入系统「下载」文件夹）
-  ipcMain.handle("browser-sniffer:export", (_e, args: { items?: SniffItem[] }) => {
+  // 导出资源链接清单（TXT，一行一个 URL）。目录优先级：入参 dir（渲染端缓存目录）→ 系统「下载」文件夹
+  ipcMain.handle("browser-sniffer:export", (_e, args: { items?: SniffItem[]; dir?: string }) => {
     const items = Array.isArray(args?.items) ? args.items : [];
     if (items.length === 0) return { success: false, error: "没有可导出的资源" };
     try {
       const time = new Date();
       const p = (n: number) => String(n).padStart(2, "0");
       const stamp = `${time.getFullYear()}${p(time.getMonth() + 1)}${p(time.getDate())}_${p(time.getHours())}${p(time.getMinutes())}${p(time.getSeconds())}`;
-      const dir = app.getPath("downloads");
+      const dir = args.dir || app.getPath("downloads");
       // 重名自动加 (n) 序号
       let filePath = path.join(dir, `嗅探资源_${stamp}.txt`);
       let n = 1;

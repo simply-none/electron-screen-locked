@@ -26,12 +26,14 @@ agent_created: true
    - **必备**：① 在侧边栏 `src/layout/index.vue` 添加菜单入口；② 在路由配置页 `src/views/routeSetting/index.vue` 添加该菜单的「可见开关」，让用户在设置里可隐藏 / 显示该菜单。
    - **可选**：若需常驻浮动交互，再按小窗四件套加一个小窗（见 `references/mini-window.md` / `references/modules/small-window.md`），且必须 `mouseEvents:true` 并遵循路径一致性红线（第 6 条）。
 9. 每次修改都必须同步更新对应模块的文档 `references/modules/<模块>.md`
+10. **导出统一规范（见 `references/export.md`，新增导出功能前必读）**：所有「导出 / 保存文件到磁盘」走统一入口 `src/utils/exportToFile.ts`（`exportTextToCache` / `exportBufferToCache`）；**不弹系统保存框、默认直写缓存目录 `fileCachePath`、成功用 `src/utils/fileNotify.ts` 的 `fileNotify` 提示（蓝色可点击路径）**；安全敏感导出（2FA 密钥库 / 文件保险库解密）保留用户选位置，仅把成功提示换成 `fileNotify`。
 
 ## 参考文档导航
 - 架构总览：`references/architecture.md`
 - 数据层约定：`references/data-layer.md`
 - 数据库踩坑指南（写库前必读）：`references/db-pitfalls.md`
 - IPC 通道契约：`references/ipc-channels.md`
+- 导出统一规范（落盘/命名/反馈/红线）：`references/export.md`
 - 小窗机制与四件套：`references/mini-window.md`
 - 通用复用模式：`references/patterns.md`
 - 主题与视觉约定（token 清单 / 严禁硬编码 / 禁用未全覆盖的 --el-* / 派生色用 color-mix）：`references/theme.md`

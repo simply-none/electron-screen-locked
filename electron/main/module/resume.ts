@@ -22,6 +22,8 @@ interface ExportPdfParams {
   html: string
   /** 保存文件名（如 张三-20260830-162000.pdf） */
   fileName: string
+  /** 直写目录（如缓存目录）；传入则不弹保存对话框，直接写入该目录 */
+  dir?: string
 }
 
 /**
@@ -92,20 +94,27 @@ async function handleExportPdf(_event: unknown, params: ExportPdfParams): Promis
     // 1. 生成 PDF Buffer（渲染端已切页，每页自带边距）
     const buffer = await renderHtmlToPdfBuffer(html);
 
-    // 2. 保存对话框（默认保存到「下载」目录）
-    const win = BrowserWindow.getAllWindows()[0];
-    const result = await dialog.showSaveDialog(win, {
-      title: "导出简历 PDF",
-      defaultPath: path.join(app.getPath("downloads"), fileName),
-      filters: [{ name: "PDF 文档", extensions: ["pdf"] }],
-    });
-    if (result.canceled || !result.filePath) {
-      return { ok: false, canceled: true };
+    // 2. 写入磁盘：传入 dir 时直写该目录（不弹保存对话框，统一导出规范）；
+    //    未传入时回退到保存对话框（向后兼容）。
+    let outPath: string;
+    if (params?.dir) {
+      outPath = path.join(params.dir, fileName);
+    } else {
+      const win = BrowserWindow.getAllWindows()[0];
+      const result = await dialog.showSaveDialog(win, {
+        title: "导出简历 PDF",
+        defaultPath: path.join(app.getPath("downloads"), fileName),
+        filters: [{ name: "PDF 文档", extensions: ["pdf"] }],
+      });
+      if (result.canceled || !result.filePath) {
+        return { ok: false, canceled: true };
+      }
+      outPath = result.filePath;
     }
 
     // 3. 写入磁盘
-    await fs.promises.writeFile(result.filePath, buffer);
-    return { ok: true, path: result.filePath };
+    await fs.promises.writeFile(outPath, buffer);
+    return { ok: true, path: outPath };
   } catch (err: any) {
     return { ok: false, error: err?.message || String(err) };
   }

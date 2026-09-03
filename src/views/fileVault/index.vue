@@ -67,6 +67,7 @@
  */
 import { ref, watch, onMounted, onUnmounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { fileNotify } from '@/utils/fileNotify';
 import LucideIcon from '@/components/LucideIcon.vue';
 import { useAutoLock, suspendAutoLockForNative, resumeAutoLockForNative } from '@/composables/useAutoLock';
 import useFileVault from './store/useFileVault';
@@ -246,8 +247,10 @@ async function onExport(file: VaultFileMeta | null) {
     const dir = await fileVaultApi.pickExportDir();
     if (!dir) return;
     const ok = await store.exportFile(file.id, dir);
-    if (ok) ElMessage.success('已导出解密文件');
-    else ElMessage.error(store.error || '导出失败');
+    if (ok) {
+      // 保留用户选择的导出目录，仅把成功提示改为可点击定位的 fileNotify
+      fileNotify({ title: '已导出解密文件', filePath: dir });
+    } else ElMessage.error(store.error || '导出失败');
   } finally {
     resumeAutoLockForNative();
   }

@@ -40,6 +40,7 @@ import {
   buildPostmanCollection,
   buildPostmanEnvironments,
 } from '../../composables/useExport'
+import { exportTextToCache } from '@/utils/exportToFile'
 
 /** 弹窗可见性（v-model） */
 const visible = defineModel<boolean>({ default: false })
@@ -105,16 +106,12 @@ async function onExport(): Promise<void> {
   }
   exporting.value = true
   try {
-    const res: any = await window.ipcRenderer.handlePromise('net-request:save-file', {
-      title: '导出接口',
-      defaultName,
-      text,
-    })
-    if (res && res.success) {
-      if (res.path) ElMessage.success('已导出：' + res.path)
+    // 统一导出工具：直写缓存目录、不弹保存框，成功用 fileNotify 提示
+    const res = exportTextToCache(text, defaultName, { title: '接口已导出' })
+    if (res.success) {
       visible.value = false
     } else {
-      ElMessage.error('导出失败：' + ((res && res.message) || '未知错误'))
+      ElMessage.error('导出失败：' + (res.message || '未知错误'))
     }
   } finally {
     exporting.value = false

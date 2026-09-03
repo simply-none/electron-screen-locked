@@ -384,13 +384,11 @@ async function onBatchDownload() {
 }
 
 /**
- * 导出所选项链接清单为 TXT（落系统「下载」文件夹）
+ * 导出所选项链接清单为 TXT（直写缓存目录，成功提示由导出工具 fileNotify 展示）
  */
 async function onExport() {
-  const filePath = await exportSniffItems(selectedItems.value);
-  if (filePath) {
-    ElMessage.success(`已导出：${filePath}`);
-  } else {
+  const ok = await exportSniffItems(selectedItems.value);
+  if (!ok) {
     ElMessage.error("导出失败，请重试");
   }
 }

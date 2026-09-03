@@ -9,6 +9,8 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { getWebview } from "./useWebviewBridge";
 import { drainSnifferEvents } from "./useSnifferHook";
+import { fileNotify } from "@/utils/fileNotify";
+import useCacheSet from "@/store/useCacheSet";
 
 /** 嗅探资源条目（与主进程 SniffItem 字段一致） */
 export interface SniffItem {
@@ -156,18 +158,25 @@ export async function clearSniffItems(tabId: string): Promise<void> {
 }
 
 /**
- * 导出资源链接清单（TXT，写入系统「下载」文件夹，一行一个 URL）
+ * 导出资源链接清单（TXT，一行一个 URL）。
+ * 走统一导出规范：直写缓存目录（fileCachePathC，缺省回退下载文件夹）、不弹保存框，
+ * 成功后用 fileNotify 展示蓝色可点击路径。
  * @param items 必填，要导出的资源列表
- * @returns 导出文件绝对路径；失败返回 null
+ * @returns 是否导出成功
  */
-export async function exportSniffItems(items: SniffItem[]): Promise<string | null> {
-  if (!items.length) return null;
+export async function exportSniffItems(items: SniffItem[]): Promise<boolean> {
+  if (!items.length) return false;
   try {
-    const res = await invoke<{ success: boolean; data?: string; error?: string }>("browser-sniffer:export", { items });
-    return res?.success && res.data ? res.data : null;
+    const dir = useCacheSet().fileCachePathC.value || undefined;
+    const res = await invoke<{ success: boolean; data?: string; error?: string }>("browser-sniffer:export", { items, dir });
+    if (res?.success && res.data) {
+      fileNotify({ title: "资源清单已导出", filePath: res.data });
+      return true;
+    }
+    return false;
   } catch (e) {
     console.error("[browser-sniffer] 导出失败（主进程通道未注册？需重启应用）:", e);
-    return null;
+    return false;
   }
 }
 

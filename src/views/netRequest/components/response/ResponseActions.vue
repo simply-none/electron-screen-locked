@@ -33,6 +33,7 @@
 import { ElMessage } from 'element-plus'
 import type { ResponseRecord } from '../../types'
 import { copyAsCurl } from '../../composables/useRequest'
+import { exportTextToCache, exportBufferToCache } from '@/utils/exportToFile'
 
 /** 组件 props 定义 */
 const props = defineProps<{
@@ -112,24 +113,19 @@ async function saveResponse(): Promise<void> {
     return
   }
   const ext = extFromContentType(record.contentType, isTextish)
-  const args: Record<string, any> = {
-    title: '保存响应',
-    defaultName: `response_${Date.now()}.${ext}`,
-  }
-  if (isTextish) {
-    args.text =
-      typeof record.body === 'object'
-        ? JSON.stringify(record.body, null, 2)
-        : String(record.body ?? '')
-  } else {
-    args.base64 = record.base64
-  }
-  const res = await window.ipcRenderer.handlePromise('net-request:save-file', args)
-  if (res && res.success) {
-    if (res.path) ElMessage.success('已保存：' + res.path)
-    // 用户取消保存对话框时不提示
-  } else {
-    ElMessage.error('保存失败：' + ((res && res.message) || '未知错误'))
+  const fileName = `response_${Date.now()}.${ext}`
+  // 统一导出规范：直写缓存目录、不弹保存框，成功用 fileNotify 提示
+  const res = isTextish
+    ? exportTextToCache(
+        typeof record.body === 'object'
+          ? JSON.stringify(record.body, null, 2)
+          : String(record.body ?? ''),
+        fileName,
+        { title: '响应已保存' },
+      )
+    : exportBufferToCache(record.base64 || '', fileName, { title: '响应已保存' })
+  if (!res.success) {
+    ElMessage.error('保存失败：' + (res.message || '未知错误'))
   }
 }
 </script>

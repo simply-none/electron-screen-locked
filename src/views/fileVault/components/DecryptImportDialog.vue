@@ -83,6 +83,7 @@
  */
 import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
+import { fileNotify } from '@/utils/fileNotify';
 import AppDialog from '@/components/AppDialog.vue';
 import LucideIcon from '@/components/LucideIcon.vue';
 import useFileVault from '../store/useFileVault';
@@ -261,8 +262,10 @@ async function saveAs(item: DecryptedItem) {
     const dir = await fileVaultApi.pickExportDir();
     if (!dir) return;
     const ok = await store.savePlainFile(item.tempPath, dir, item.name || `未命名${item.ext || ''}`);
-    if (ok) ElMessage.success('已另存为明文文件');
-    else ElMessage.error(store.error || '保存失败');
+    if (ok) {
+      // 保留用户选择的导出目录，仅把成功提示改为可点击定位的 fileNotify
+      fileNotify({ title: '已另存为明文文件', filePath: dir });
+    } else ElMessage.error(store.error || '保存失败');
   } finally {
     resumeAutoLockForNative();
   }

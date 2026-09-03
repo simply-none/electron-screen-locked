@@ -14,6 +14,18 @@
 | ~~`query-data` / `set-data` / `delete-data`~~ | 渲染→主 | **已弃用**（2026-08-30 渲染端全部迁移到 `new-sql:*` 三件套，主进程保留注册仅供 `basic_info`/`clipboard_history` 兜底与主进程内部使用，新代码禁用） |
 | `get-store` / `set-store` / `replace-store` / `clear-store` / `get-stort-all` | 双向 | electron-store 读写（注意 `get-stort-all` 疑似拼写错误） |
 
+## 导出统一规范（exportToFile）
+> 全应用「导出 / 保存文件」走统一入口 `src/utils/exportToFile.ts`，行为一致：**不弹保存对话框、默认直写缓存目录 `fileCachePath`、成功用 `src/utils/fileNotify.ts` 的 `fileNotify` 提示（蓝色可点击路径）**。详见 `references/export.md`。
+
+| 通道 | 方向 | 用途 |
+|---|---|---|
+| `export-text-to-cache` | 渲染→主（`sendSync` / `ipcMain.on`+`e.returnValue` 同步） | 文本 UTF-8 直写缓存目录，参数 `{ text, filename, dir? }` → `{ success, path? }` |
+| `export-buffer-to-cache` | 渲染→主（同步） | base64 二进制直写缓存目录，参数 `{ base64, filename, dir? }` → `{ success, path? }` |
+
+- `dir` 缺省时主进程回退顺序：`dir` → electron-store `fileCachePath` 设置项 → 用户文档目录。
+- 目录不存在主进程自动 `mkdirSync`。
+- 安全敏感导出（2FA 密钥库 / 文件保险库解密）**保留用户选择位置**（仍用各自原生对话框），仅成功提示改用 `fileNotify`。
+
 ## 提醒引擎 newReminder
 | 通道 | 方向 | 用途 |
 |---|---|---|
