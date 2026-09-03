@@ -135,6 +135,12 @@
       <button class="ctx-item" @click="ctxCrossRef">
         <LucideIcon name="Layers" :size="14" /> 跨主题引用…
       </button>
+      <button class="ctx-item" @click="ctxOutgoing">
+        <LucideIcon name="ArrowUpRight" :size="14" /> 正向链接
+      </button>
+      <button class="ctx-item" @click="ctxBacklinks">
+        <LucideIcon name="ArrowDownLeft" :size="14" /> 反向链接
+      </button>
       <button class="ctx-item" @click="ctxSubTheme">
         <LucideIcon name="MessageSquarePlus" :size="14" /> 发起子主题…
       </button>
@@ -327,6 +333,18 @@ async function ctxTogglePin() {
 /** 右键「跨主题引用…」：打开跨主题引用选择弹窗 */
 function ctxCrossRef() {
   openCrossRefPicker();
+  closeCtx();
+}
+
+/** 右键「正向链接」：本对话跨主题引用了哪些对话（右侧抽屉展示目标） */
+function ctxOutgoing() {
+  if (ctxMenu.value.conv) showCrossRefTargets(ctxMenu.value.conv);
+  closeCtx();
+}
+
+/** 右键「反向链接」：哪些对话跨主题引用了本对话（右侧抽屉展示来源） */
+function ctxBacklinks() {
+  if (ctxMenu.value.conv) showCrossReferencedBy(ctxMenu.value.conv);
   closeCtx();
 }
 

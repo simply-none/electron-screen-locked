@@ -605,7 +605,7 @@ function showCrossReferencedBy(conv: any) {
   const sources = crossReferencedBy.value[Number(conv.id)] || [];
   referenceDrawer.value = {
     open: true,
-    title: `被 ${sources.length} 条对话跨主题引用`,
+    title: `反向链接（被 ${sources.length} 条对话跨主题引用）`,
     items: sources,
   };
 }
@@ -656,7 +656,7 @@ async function showCrossRefTargets(
   }
   referenceDrawer.value = {
     open: true,
-    title: `跨主题引用的对话（${items.length}）`,
+    title: `正向链接（跨主题引用了 ${items.length} 条对话）`,
     items,
   };
 }
