@@ -9,7 +9,7 @@ import {
 import { createOtherWindow, hideOtherWindow } from "./newWindow.ts";
 import { store } from "./store.ts";
 import { queryByConditions } from "../utils/sql.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import { startScreenshotCapture } from "./screenshot.ts";
 
 // 各小窗的兜底配置（与 src/views/windowMode/config/windowSections.ts 的默认尺寸保持一致）。

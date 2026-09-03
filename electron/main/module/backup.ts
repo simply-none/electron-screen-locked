@@ -21,7 +21,6 @@ import path from "node:path";
 import moment from "moment";
 import { store } from "./store.ts";
 import { myDb, reopenNewSqlite } from "./newSql.ts";
-import { myDb as oldMyDb, reopenSqlite } from "./sql.ts";
 
 /** 备份文件后缀（实为 zip 格式） */
 const BACKUP_EXT = ".jlbak";
@@ -452,7 +451,7 @@ async function restoreBackup(options: { fileName?: string; filePath?: string }):
 
     try {
       // 3. 关闭两个连接池的全部连接（释放文件句柄，Windows 下必须先关后覆盖）
-      for (const pool of [myDb, oldMyDb]) {
+      for (const pool of [myDb]) {
         for (const dbName of Object.keys(pool)) {
           const conn = pool[dbName];
           if (!conn) continue;
@@ -481,9 +480,8 @@ async function restoreBackup(options: { fileName?: string; filePath?: string }):
         }
       }
 
-      // 5. 重开连接（两个连接池各自重连并恢复 WAL 模式）
+      // 5. 重开连接（单一连接池重连并恢复 WAL 模式）
       await reopenNewSqlite();
-      await reopenSqlite();
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

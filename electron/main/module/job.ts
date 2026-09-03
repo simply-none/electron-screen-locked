@@ -4,7 +4,7 @@ import moment from "moment";
 import { win, hideApp, focusAppToTop } from "./mainWindow.ts";
 import { createOtherWindow } from "./newWindow.ts";
 import { upsertData } from "../utils/sql.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import { tableName } from "./store.ts";
 
 let job = {

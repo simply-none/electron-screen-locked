@@ -6,7 +6,7 @@
  * 独立成模块以避免在主进程循环依赖（stock.ts 已 import stockCache.ts）。
  */
 
-import { myDb } from './sql.ts'
+import { myDb } from './newSql.ts'
 import { queryByConditions, upsertData } from '../utils/sql.ts'
 import { tableName as basicInfoTable } from './store.ts'
 import { CACHE_TTL_DB_KEY } from './stockCache.ts'

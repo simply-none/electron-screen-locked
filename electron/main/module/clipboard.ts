@@ -1,5 +1,5 @@
 import { createTable } from "../utils/sql.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import { clipboard, ipcMain, nativeImage } from "electron";
 import { exec } from "child_process";
 import moment from 'moment';

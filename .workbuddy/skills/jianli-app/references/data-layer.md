@@ -1,8 +1,11 @@
 # 数据层约定（data-layer）
 
-## 两套数据层并存
-- **新层** `electron/main/module/newSql.ts`：业务表首选。封装 `query` / `count` / `insert` / `upsert` / `update` / `delete` / `transaction` 等。
-- **旧层** `electron/main/module/sql.ts`：`myDb` / `queryByConditions` / `upsertData`，通道 `query-data`/`set-data`/`delete-data` **渲染端已弃用**（2026-08-30 完成迁移，仅保留注册供 `basic_info`/`clipboard_history` 建表兜底与主进程内部使用）。**新增业务严禁再用旧层**。
+## 数据层：唯一 newSql 层（双 SQL 层合并已于 2026-09-03 执行）
+- **唯一数据层** `electron/main/module/newSql.ts`：持有唯一连接池 `myDb`，封装 `query` / `count` / `insert` / `upsert` / `update` / `delete` / `transaction` / `execute` 等（Promise 风格 + IPC `new-sql:*`）。
+- **`module/sql.ts` 已删除**：它曾持有独立 `myDb`（双连接池根源）并注册 deprecated IPC `query-data`/`set-data`/`delete-data`，合并后这些通道一并移除（渲染端早已不再调用）。
+- **多库**：`myDb` 含 `db`（业务库，缓存目录 `*.sqlite`）与 `shiciDb`（宋词只读库，启动即从打包资源 `vitePublic/宋词/ci.db` 打开，跳过 WAL）；`userDb` 死库不再单独建连。`myDb.shiciDb` 只读，仅供 `poetData` 查询。
+- **`utils/sql.ts` 现为辅助层**：仅保留接收 `db` 参数的回调式辅助函数（`queryByConditions` / `upsertData` / `deleteData` / `createTable`），不含独立连接 / IPC；全部调用方已改为从 `newSql.ts` 取 `myDb`。后续可选内联进 newSql。
+- **旧层→新层迁移映射、API 签名、红线**见 **`references/sql-db-ops.md`**；合并方案与执行记录见 **`references/sql-merge-plan.md`**。
 
 ## 新旧层查询语义差异（迁移易踩）
 - 旧层：`whereStr` / `limit` / `offset` / `orderBy` / `orderByDesc` 全塞在 `conditions` 里。

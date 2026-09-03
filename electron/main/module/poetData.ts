@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import path from "node:path";
 import { createTable, queryByConditions, upsertData } from "../utils/sql.ts";
 import { readFileList, readJsonFileContent } from "../utils/common.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 
 export function initPoetData() {
   ipcMain.on("poet-data", (e, fullScreen: boolean) => {

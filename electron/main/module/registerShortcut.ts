@@ -1,7 +1,7 @@
 import { createTable, queryByConditions, upsertData } from "../utils/sql.ts";
 import { win, hideApp, focusAppToTop } from "./mainWindow.ts";
 import moment from "moment";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import { clipboard, ipcMain, globalShortcut, BrowserWindow } from "electron";
 import colors from "colors";
 import { createOtherWindow, hideOtherWindow } from "./newWindow.ts";

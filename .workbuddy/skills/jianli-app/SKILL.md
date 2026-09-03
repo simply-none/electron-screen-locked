@@ -13,6 +13,7 @@ agent_created: true
 - 任务涉及本项目任意模块（习惯打卡 / 番茄钟 / 待办 / 剪贴板 / 笔记 / 电子书 / 股票 / 截图 / 小窗 / 提醒 / 命令面板 / 调色板 / 数据层 …）。
 - 需要理解：进程边界、改主进程要不要重启、IPC 通道怎么对接、小窗怎么加、某个注册表怎么扩。
 - 要新增功能、重构功能、排查问题、排查「发了 IPC 没反应」、避免 newSql / 穿透 / 破表等历史坑。
+- **数据层操作 / 双 SQL 层合并**：建表、读写业务数据、多库选择、旧层调用迁移，见「参考文档导航」中的 `sql-db-ops.md` 与 `sql-merge-plan.md`。
 
 ## 全局红线（先读，违反必踩雷）
 1. 渲染端**禁止 `import electron/*`（含类型）**；一切系统 / 磁盘 / 库操作走 IPC。
@@ -31,6 +32,8 @@ agent_created: true
 ## 参考文档导航
 - 架构总览：`references/architecture.md`
 - 数据层约定：`references/data-layer.md`
+- SQL 数据库操作（统一数据层 newSql）：`references/sql-db-ops.md`
+- 双 SQL 层合并设计：`references/sql-merge-plan.md`
 - 数据库踩坑指南（写库前必读）：`references/db-pitfalls.md`
 - IPC 通道契约：`references/ipc-channels.md`
 - 导出统一规范（落盘/命名/反馈/红线）：`references/export.md`

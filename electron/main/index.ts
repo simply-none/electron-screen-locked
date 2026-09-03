@@ -14,7 +14,6 @@ import { initSystemInfo } from "./module/systemInfo.ts";
 import { initNetRequest } from "./module/netRequest.ts";
 import { initClipboard } from "./module/clipboard.ts";
 import { registerJlocalProtocol, registerJlocalProtocolBefore } from "./module/protocol.ts";
-import { initSqlite } from "./module/sql.ts";
 import { initNewSqlite, ensureTableExists } from "./module/newSql.ts";
 import { initNewReminder } from "./module/newReminder.ts";
 import { initCountdown } from "./module/countdown.ts";
@@ -91,9 +90,7 @@ async function createWindow() {
   initMainWindow();
   // 日志
   initLog();
-  // 数据库
-  await initSqlite();
-  // 高性能数据库
+  // 数据库（统一由 newSql 初始化，包含 db.sqlite 与打包宋词库 shiciDb）
   await initNewSqlite();
   // 全新提醒引擎（定点/周期/多状态），依赖 newSql
   await initNewReminder();

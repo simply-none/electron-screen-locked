@@ -14,7 +14,7 @@
 
 import { ipcMain } from 'electron'
 import { queryByConditions, upsertData } from '../utils/sql.ts'
-import { myDb } from './sql.ts'
+import { myDb } from './newSql.ts'
 import {
   ensureStockCacheTable,
   getFromCache,

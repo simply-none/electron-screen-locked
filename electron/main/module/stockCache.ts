@@ -11,7 +11,7 @@
  * 本模块被 stock.ts 的带缓存 IPC 处理器调用，渲染端无感。
  */
 
-import { myDb } from './sql.ts'
+import { myDb } from './newSql.ts'
 import { queryByConditions, upsertData, createTable } from '../utils/sql.ts'
 
 /** 缓存表名 */

@@ -1,7 +1,7 @@
 import { BrowserWindow, ipcMain, screen } from "electron";
 import colors from "colors";
 import { getAllStore, tableName } from "./store.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import {
   appLogoIco,
   appName,

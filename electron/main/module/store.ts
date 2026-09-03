@@ -1,7 +1,7 @@
 import { ipcMain } from "electron";
 import ElectronStore from "electron-store";
 import { queryByConditions, upsertData } from "../utils/sql.ts";
-import { myDb } from "./sql.ts";
+import { myDb } from "./newSql.ts";
 import colors from "colors";
 
 // 使用nodejs原生crypto模块进行加密，解密

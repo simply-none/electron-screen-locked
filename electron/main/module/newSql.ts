@@ -17,6 +17,7 @@ import type { Database } from "sqlite3";
 import path from "node:path";
 import fs from "node:fs";
 import { store } from "./store.ts";
+import { vitePublic } from "../variables.ts";
 
 const verbose = defaultSqlite3.verbose;
 
@@ -173,13 +174,19 @@ async function createDBFile() {
   }
 
   Object.keys(myDb).forEach((dbName) => {
+    const sqlite3 = verbose();
+    // 宋词只读库：随应用分发，从打包资源打开（与旧层行为一致），不写缓存、不切 WAL
+    if (dbName === "shiciDb") {
+      const shiciDbPath = path.resolve(vitePublic, "宋词/ci.db");
+      myDb[dbName] = new sqlite3.Database(shiciDbPath);
+      return;
+    }
     let dbFullName = dbName + ".sqlite";
     if (!fs.existsSync(path.resolve(cachePath, dbFullName))) {
       fs.writeFileSync(path.resolve(cachePath, dbFullName), "");
     }
 
     let dbPath = path.resolve(cachePath, dbFullName);
-    const sqlite3 = verbose();
     myDb[dbName] = new sqlite3.Database(dbPath);
   });
 }
@@ -196,6 +203,8 @@ async function createDBFile() {
  */
 async function initWALMode() {
   for (const dbName of Object.keys(myDb)) {
+    // 宋词只读库不参与 WAL（打包资源不可写），跳过 PRAGMA
+    if (dbName === "shiciDb") continue;
     await new Promise<void>((resolve, reject) => {
       myDb[dbName].run("PRAGMA journal_mode = WAL;", (err) => {
         if (err) {
