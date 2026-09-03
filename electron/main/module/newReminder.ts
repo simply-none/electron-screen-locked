@@ -3,6 +3,7 @@
  *
  * - 数据全部落在 newSql.ts 的 `reminders` 表（仅此 module 操作该表）。
  * - 三种模式：定点(time) / 周期(interval) / 多状态(stateful)。
+ * - 待办截止提醒也已并入本引擎（syncTodoReminders，source='todo'），统一调度/触发/免打扰/重启恢复。
  * - 多状态（番茄钟）时间线由本进程持有，通过 `tips-state-change`(A：状态进入=提醒到了，
  *   弹通知+写记录) 与 `tips-state-sync`(B：仅补偿/恢复/停止，不弹不记) 两条通道下发，
  *   渲染端只消费 store，绝不再自行计算「下次时间」。
@@ -239,7 +240,18 @@ function broadcastSync(payload: any) {
 
 function broadcastTrigger(payload: any) {
   const w = getWin();
-  if (w && w.webContents) w.webContents.send("tips-trigger", payload);
+  if (!w || !w.webContents) return;
+  // 待办截止提醒（source='todo'）改走 todo-reminder-trigger，App.vue 监听弹通知（逻辑不变）
+  if (payload?.source === "todo") {
+    w.webContents.send("todo-reminder-trigger", {
+      key: payload.refKey,
+      title: payload.title,
+      dueDate: payload.dueDate,
+      triggerTime: payload.triggerTime,
+    });
+    return;
+  }
+  w.webContents.send("tips-trigger", payload);
 }
 
 function sendStarttimeUpdated(id: string, startTime: number) {
@@ -333,6 +345,90 @@ async function scheduleAll(): Promise<void> {
   for (const r of all) {
     if (!r.enabled) continue;
     scheduleReminder(r);
+  }
+}
+
+// ============ 待办截止提醒并入本引擎 ============
+// 原 job.ts 的 todoReminderJobs（cron）已迁移至此：待办截止提醒复用 newReminder 的
+// 调度/触发/免打扰/重启恢复，形成单一提醒引擎。每条待办按 count×interval 在 dueDate
+// 前生成多个 once 型触发点，写成 reminders 表行（id=todo:<key>:#<i>，source='todo'），
+// 由 scheduleReminder/nextFireTime 统一调度；到点经 broadcastTrigger 的 source 分支
+// 改发 todo-reminder-trigger（App.vue 监听，弹通知逻辑不变）。
+export async function syncTodoReminders(key?: string): Promise<void> {
+  const db = myDb?.db;
+  if (!db) return;
+
+  // 1) 清掉受影响的旧 todo: 行（先停定时器再删库行）
+  let oldIds: string[] = [];
+  try {
+    const oldRows = (await query({
+      tableName: TABLE,
+      SqlStr: `SELECT id, refKey FROM ${TABLE} WHERE source = 'todo'`,
+    })) as any[] | null;
+    oldIds = ((oldRows || []) as any[])
+      .filter((r) => !key || r.refKey === key)
+      .map((r) => r.id);
+  } catch {
+    // 首次运行 source 列尚未创建（由下方 upsert 自动补列），无旧行可清
+    oldIds = [];
+  }
+  for (const id of oldIds) {
+    stopReminder(id);
+    await sqlDel({ tableName: TABLE, condition: { id } });
+  }
+
+  // 2) 读待办，按「到期前 count 次 / 间隔 interval」重新生成触发点
+  const todos = await new Promise<any[]>((resolve) => {
+    db.all("SELECT * FROM todo_list", [], (err: any, rows: any[]) => {
+      resolve(err ? [] : (rows || []));
+    });
+  });
+  const now = Date.now();
+  for (const todo of (todos || [])) {
+    if (key && todo.key !== key) continue;
+    const isDone = todo.status
+      ? todo.status === "completed" || todo.status === "cancelled"
+      : Number(todo.completed) === 1;
+    if (isDone) continue;
+    if (Number(todo.deadlineReminder) !== 1) continue;
+    const due = new Date(String(todo.dueDate).replace(" ", "T")).getTime();
+    if (isNaN(due) || due <= now) continue; // 已过期不排程
+
+    const intervalMs =
+      Number(
+        todo.remindIntervalUnit === "hour"
+          ? Number(todo.remindInterval) * 3600000
+          : Number(todo.remindInterval) * 60000
+      ) || 30 * 60000;
+    const count = Math.min(50, Math.max(1, Number(todo.remindCount) || 1));
+
+    for (let i = 0; i < count; i++) {
+      const t = due - i * intervalMs;
+      if (t <= now + 1000) continue; // 仅排程未来时间点（留 1s 余量）
+      const fire = new Date(t);
+      const y = fire.getFullYear();
+      const mo = String(fire.getMonth() + 1).padStart(2, "0");
+      const d = String(fire.getDate()).padStart(2, "0");
+      const h = String(fire.getHours()).padStart(2, "0");
+      const mi = String(fire.getMinutes()).padStart(2, "0");
+      const row = {
+        id: `todo:${todo.key}#${i}`,
+        source: "todo",
+        refKey: todo.key,
+        title: todo.title || "待办事项",
+        content: "",
+        dueDate: todo.dueDate,
+        mode: "time",
+        repeat: "once",
+        date: `${y}-${mo}-${d}`,
+        time: `${h}:${mi}`,
+        enabled: 1,
+        recordAfter: 0,
+        loop: 0,
+      };
+      await upsert({ tableName: TABLE, data: row, config: { primaryKey: "id" } });
+      scheduleReminder(row);
+    }
   }
 }
 
@@ -1159,7 +1255,9 @@ function requestTipsState(reminderId?: string): void {
 function registerIpc(): void {
   // 渲染端初始化读取全部提醒
   ipcMain.handle("get-tips", async () => {
-    return loadAll();
+    const all = await loadAll();
+    // 过滤引擎托管的待办截止提醒（source='todo'），避免污染用户提醒列表
+    return (all || []).filter((r: any) => r.source !== "todo");
   });
 
   // 渲染端新增/编辑/切换启用：落库 + 重排程
@@ -1231,6 +1329,12 @@ function registerIpc(): void {
   ipcMain.on("tips-reload", () => {
     scheduleAll();
   });
+
+  // 待办新增/编辑/删除/完成切换后，渲染端发 update-todo-reminders 触发截止提醒重排
+  // （保持渲染端零改动：沿用旧 IPC 名，此处转调引擎的 syncTodoReminders 全量同步）
+  ipcMain.on("update-todo-reminders", () => {
+    syncTodoReminders();
+  });
 }
 
 // ============================ 启动 ============================
@@ -1241,6 +1345,8 @@ export async function initNewReminder(): Promise<void> {
   await ensureTableExists(TABLE, undefined, "id", { primaryKeyType: "TEXT" });
   await seedPomodoro();
   await scheduleAll();
+  // 启动时把待办截止提醒接入引擎（替代旧 job.ts restoreTodoReminders）
+  await syncTodoReminders();
   registerIpc();
   // 若启动前渲染端已请求过状态（极端竞态），补发首帧
   if (pendingStateRequest) {

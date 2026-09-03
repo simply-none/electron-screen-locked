@@ -2,7 +2,7 @@
  * 重复任务引擎（主进程）
  * - 在应用启动与每日 00:00 扫描 todo_list 中的「重复模板」，按「天」懒生成实例（只生成当天的，不预生成未来）
  * - 每次保存重复待办后，渲染端发送 recurrence:sync 立即生成当天实例
- * - 生成完成后调用 applyTodoReminders 重新排程截止提醒
+ * - 生成完成后调用 newReminder 的 syncTodoReminders 重新排程截止提醒
  *
  * 数据模型：模板行 recurrenceRule 非空且 recurrenceId 为空；实例行 recurrenceId=模板key、isRecurrenceInstance=1
  * 读取/写入均走 newSql 的 query/upsert（不使用危险通道）。
@@ -12,7 +12,7 @@ import { CronJob } from 'cron';
 import moment from 'moment';
 import { randomUUID } from 'crypto';
 import { query, upsert } from './newSql.ts';
-import { applyTodoReminders } from './job.ts';
+import { syncTodoReminders } from './newReminder.ts';
 
 /** 向前预生成多少天（已废弃：改为「按天懒生成」，每次只生成当天实例，由每日 00:00 定时任务补次日） */
 
@@ -154,7 +154,7 @@ export async function generateRecurrenceInstances() {
     for (const t of templates) {
       await generateForTemplate(t);
     }
-    applyTodoReminders();
+    syncTodoReminders();
   } catch (e) {
     console.error('[recurrence] 生成实例失败:', e);
   }

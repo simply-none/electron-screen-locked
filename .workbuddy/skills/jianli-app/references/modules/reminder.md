@@ -24,7 +24,14 @@
 ## 复用 / 集成点
 - **引擎被 habit 复用**：习惯通过 `useHabit.syncReminders()` 把提醒写进同一引擎（id 前缀 `habit:`），删除习惯时联动清理。
 - **recordAfter 跳转主题对话**：提醒设 `recordAfter=1` 到点后 `App.vue` 自动 `router.push(THEME_CONVERSATION)` 记录情绪。
-- **job 待办提醒**：`electron/main/module/job.ts:174` 的 `update-todo-reminders` 由引擎外的待办截止提醒复用。
+- **待办截止提醒（已并入引擎）**：原 job.ts 的 cron 待办提醒（`todoReminderJobs`/`applyTodoReminders`）已迁移进本引擎，由 `syncTodoReminders()` 统一调度，详见下方「待办截止提醒」小节。job.ts 现仅保留工作/休息定时器（`createJob`/`startJobFn`）。
+
+## 待办截止提醒（2026-09-03 并入引擎）
+- **机制**：`syncTodoReminders(key?)`（主进程 `newReminder.ts`）读 `todo_list`，对 `deadlineReminder=1` 且未完成的待办按 `count`×`interval` 在 `dueDate` 前生成多个触发点，写成 `reminders` 表行 `id=todo:<key>:#<i>`、`mode:'time'`/`repeat:'once'`/`source:'todo'`（快照 `title`/`refKey`/`dueDate`），复用 `scheduleReminder`/`nextFireTime`/`broadcastTrigger`/`stopReminder` 与免打扰、重启恢复。
+- **触发**：`broadcastTrigger` 见 `source==='todo'` 改发 `todo-reminder-trigger`（payload `{key,title,dueDate,triggerTime}`），`src/App.vue` 监听弹通知，逻辑不变。
+- **重排时机**：渲染端发 `update-todo-reminders`（沿用旧 IPC 名，现由本引擎监听，转调全量 `syncTodoReminders()`）；`recurrence.ts` 生成重复实例后也调 `syncTodoReminders()`；应用启动 `initNewReminder` 末尾调一次。
+- **用户列表过滤**：`get-tips` 返回时过滤 `source!=='todo'`，避免系统托管的待办提醒污染用户提醒列表。
+- **清理**：`syncTodoReminders` 先删受影响旧 `todo:` 行（`query` 列出 + `del`，**不走 `new-sql:execute`**）再重写；待办完成/删除/编辑后由渲染端 `update-todo-reminders` 触发重排。
 
 ## 特有坑 / 注意
 - **持久化在主进程**：`newTips` 页面无自有 store 落库，所有数据靠 `newReminder.ts` 的 `get-tips/tips-save/tips-delete` 读写，改动引擎逻辑必须重启 Electron。

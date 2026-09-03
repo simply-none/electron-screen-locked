@@ -26,5 +26,10 @@
 - 打包环境 worker 路径与 dev 不同（见 `systemInfo`）；electron-builder 资源走 `public/`。
 - 控制台中文乱码：在仓库根目录执行 `chcp 65001`。
 
+## 提醒引擎（单一）
+- 所有用户面向的「到点触发」统一由主进程 `electron/main/module/newReminder.ts` 调度（定点/周期/多状态/免打扰 + 番茄钟 + 习惯复用 + 待办截止提醒）。
+- `job.ts` 现仅保留工作/休息定时器（`createJob`/`startJobFn`，cron）；待办截止提醒的 cron 调度已并入 newReminder（`syncTodoReminders`），`recurrence.ts` 每日 00:00 懒生成重复待办实例后调用它。
+- 改 newReminder / job.ts / recurrence.ts 均**必须重启 Electron**。
+
 ## 何时读本文档
 初次接触本项目、需要判断「改哪类文件、要不要重启、走不走 IPC」时。具体模块见 `references/modules/*.md`。
