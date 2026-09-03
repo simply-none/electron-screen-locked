@@ -5,6 +5,7 @@
 
 ## 关键设计决策（与用户确认）
 - **密钥层级（数据密钥 + 口令加密密钥）**：`dataKey` 随机 32 字节，仅驻留主进程内存；`KEK = PBKDF2(password, salt, 200000, 32, sha256)`；`wrappedKey = AES-256-GCM(KEK, dataKey)` 落库 `file_vault_config`。每文件用 `dataKey` 加密，密文落独立目录（文件名随机 uuid + `.jlv`）。
+- **`.jlv` 自描述格式（修复「解密后文件名为未命名」）**：`import` 写盘时头部嵌入原始文件名与扩展名——`JLV1`(4B) + metaLen(uint32 BE) + JSON 元数据 `{"name","ext"}` + iv(12B) + ct；`export`/`decrypt-temp`/`import-decrypt`/`import-decrypt-bytes` 均经 `parseCipher(buf)` 解析，按魔数自动区分**新格式**与**旧格式（仅有 iv+ct，文件名只存于 DB）**，旧文件仍可解密但无内嵌名（回退 `guessExt` / 文件名去 `.jlv`）。右键「解密(.jlv)」走 `import-decrypt`（路径通道，返回 `name`），从此能还原真实文件名。
 - **改密码 = 仅重 wrap `dataKey`**，无需重加密所有文件（相对「每文件派生口令密钥」方案的核心优势）。
 - **锁定 = 清零内存 `dataKey` + `vaultPass`**，保留路径。
 - **文件名加密（方案 A）**：`original_name` 用 `dataKey` 加密后存库（`file_vault_files.name`）；未解锁时列表为空、搜索只能在解锁后可用。代价 = 库泄露也不暴露文件名（内容本就不可读）。
@@ -44,7 +45,7 @@
 | `file-vault:cleanup-temp` | 清空预览临时目录（防磁盘残留明文） |
 | `file-vault:delete` `{id}` | 删元数据 + 删密文 |
 | `file-vault:pick-import-decrypt` | 原生多选对话框（过滤 `.jlv`），返回源文件路径数组 |
-| `file-vault:import-decrypt` `{sourcePath}` | **导入解密（路径通道）**：要求已解锁；读 `.jlv` → 用内存 `dataKey` 解密到临时目录（明文不过 IPC），返回 `{tempPath, ext}`；非本保险箱/损坏会 GCM 失败报错 |
+| `file-vault:import-decrypt` `{sourcePath}` | **导入解密（路径通道）**：要求已解锁；读 `.jlv` → 用内存 `dataKey` 解密到临时目录（明文不过 IPC），返回 `{tempPath, ext, name}`（`name` 取自 `.jlv` 内嵌元数据，旧格式为 undefined）；非本保险箱/损坏会 GCM 失败报错 |
 | `file-vault:import-decrypt-bytes` `{name, buffer}` | **导入解密（字节通道）**：渲染端读文件字节后传入（绕开本地路径依赖），主进程解密写临时目录，返回 `{tempPath, ext, name}`；用于打包后 `file://` 页面拖拽导致 `File.path` 为空的环境（见「导入解密」小节的拖拽取路径坑） |
 | `file-vault:save-plain` `{tempPath, destDir, name}` | 把解密后的临时明文另存到目标目录（主进程落盘，文件名防穿越清洗） |
 | `file-vault:cleanup-import-decrypt` | 清空导入解密临时目录 |
@@ -75,20 +76,25 @@
   - `registerShellMenuElevated()`：用 `PowerShell Start-Process -Verb runAs` 提权启动自身 `--register-shell-menu-elevated` 参数；`index.ts` 在 `requestSingleInstanceLock` 之前拦截该参数，仅执行 `registerShellMenu()` 然后 `app.quit()`，不进入正常 App 生命周期。
   - **dev / 打包模式均自动注册**；`scripts/register-shell-menu-dev.cjs` 作为手动兜底：`--cascading`（UAC 提权 HKLM 级联）/ 默认（HKCU 扁平三项）/ `--unregister`。
 - **启动参数路由**：`app.on('second-instance')` 改造为解析 argv 里的 `--vault-*` 标志（`parseCliFiles`），连同首次启动的 `process.argv` 一起入队 `queueCli`；渲染端主窗口就绪后主进程 `flushPending(win)` 经 `app:cli-open` 逐条下发。多选文件会多次触发 `second-instance` → 队列聚合成一批，规避「`%1` 只传首文件」的坑。
+  - **防误收集仓库目录**：dev 模式下注册表命令形如 `"<electron.exe>" "<仓库目录>" --vault-encrypt "%1"`，`parseCliFiles` 必须显式排除 `process.execPath` 与 `app.getAppPath()`，并在最后把结果过滤为「真实存在的文件（`fs.statSync(...).isFile()`）」，否则会把仓库目录当成待加密文件列出来（曾导致右键加密时多出一个 `electron-vite-vue` 代码库项）。index.ts 调用 parseCliFiles 时传入 `{ exePath: process.execPath, appDir: app.getAppPath() }`。
   - **首启竞态**：渲染端 `App.vue` 挂载后 `send('app:cli-ready')`，主进程 `ipcMain.on('app:cli-ready')` 时再 `flushPending(win)`，避免「消息早于监听注册」丢失。
-- **渲染端接线**：`App.vue` 常驻监听 `app:cli-open` → `router.push(FILE_VAULT)` + `store.setPendingCli(item)`；`index.vue` 在 `onMounted`（`store.init()` 之后）与 `watch(pendingCli)` 两处消费 `applyPending()`；未解锁先弹解锁门，解锁完成后由 `pendingAfterUnlock` 自动打开对应对话框。
-  - `encrypt` → `ImportDialog`（传 `initialFiles` 预填，复用 `importFiles` + 默认安全删除源文件）；
-  - `decrypt` → `DecryptImportDialog`（传 `initialFiles` 预填，复用 `import-decrypt*`）；
-  - `secure-delete` → 弹确认后调 `file-vault:secure-delete`（**无需解锁**，复用 `secureDeleteFile`）。
+  - **应用隐藏到托盘时必须先 `showApp()`**：`second-instance` 里若仅 `if(win.isMinimized()) win.restore(); win.focus();`，当 App 被「隐藏到托盘」（`hideApp()` → `win.hide()`）时 `isMinimized()` 为 false、`focus()` 无法让隐藏窗口重新可见，右键触发的解密/加密/安全删除弹窗会在后台静默执行、用户完全看不到。故 `second-instance` 必须改用 `mainWindow.ts` 的 `showApp()`（无论最小化还是隐藏到托盘都先 `restore`+`show`+`focus`），再 `flushPending(win)`。
+- **渲染端接线（不再跳转保险箱页）**：`App.vue` 常驻监听 `app:cli-open` → **仅** `store.setPendingCli(item)`（已移除 `router.push(FILE_VAULT)`，避免强制跳转到保险箱列表页）；新增全局组件 `components/FileVaultCliHandler.vue`（常驻 `App.vue` 模板根级）`watch(pendingCli)` 消费：
+  - `secure-delete` → 直接 `ElMessageBox.confirm` 后调 `file-vault:secure-delete`（**无需解锁、不跳转**）；
+  - `encrypt` → 已解锁直接弹 `ImportDialog`（传 `initialFiles` 预填，复用 `importFiles` + 默认安全删除源文件）；未解锁（或从未创建）先弹全局 `UnlockView`，解锁成功后由 `onUnlocked` 自动打开 `ImportDialog`；
+  - `decrypt` → 已解锁直接弹 `DecryptImportDialog`（传 `initialFiles` 预填，复用 `import-decrypt*`）；未解锁先弹解锁门，解锁后自动打开。
+  - 这样右键任意文件即可**直接执行**保险箱对应功能；涉及解锁的「解锁后自动继续」，而非一次性不处理。
+- **保险箱页 `index.vue`**：仅保留「手动进入页面后的解锁门 + 工具栏导入/解密/锁定 + 列表预览导出删除」，已移除全部右键 `pendingCli` / `applyPending` 逻辑（右键值由全局处理器独占消费，避免重复触发）。
 - **新增主进程文件**：`electron/main/module/shellMenu.ts`（HKLM 级联注册 + HKCU 扁平 fallback + UAC 提权 + 启动参数解析/队列；dev / 打包均自动注册）；`fileVault.ts` 仅新增 `file-vault:secure-delete` 一个 IPC。
-- **改动文件**：`electron/main/index.ts`（注册 + `--register-shell-menu-elevated` 拦截 + second-instance + cli-ready + 首启 argv）、`api/fileVaultApi.ts`（secureDelete）、`store/useFileVault.ts`（pendingCli/setPendingCli/clearPendingCli/secureDeleteFiles）、`index.vue`（applyPending + initialFiles 预填）、`App.vue`（cli-open 监听 + cli-ready 握手）、`ImportDialog.vue`/`DecryptImportDialog.vue`（initialFiles prop）。
+- **新增渲染端组件**：`components/FileVaultCliHandler.vue`（右键全局处理器，常驻 App.vue）。
+- **改动文件**：`electron/main/index.ts`（注册 + `--register-shell-menu-elevated` 拦截 + second-instance + cli-ready + 首启 argv）、`api/fileVaultApi.ts`（secureDelete）、`store/useFileVault.ts`（pendingCli/setPendingCli/clearPendingCli/secureDeleteFiles）、`App.vue`（cli-open 改为仅 setPendingCli + 挂载 FileVaultCliHandler，移除 router.push）、`FileVaultCliHandler.vue`（新增，右键全局处理）、`index.vue`（移除右键处理，保留手动解锁门/工具栏）、`ImportDialog.vue`/`DecryptImportDialog.vue`（initialFiles prop）。
 
 ## 导入解密（拖拽 / 选择 .jlv）
 - **定位**：「导出解密」的逆通路——把磁盘上的 `.jlv`（来自本保险箱的导出 / 备份 / 另存）恢复为明文。
 - **入口**：解锁后工具栏「导入解密」按钮 → 原生选择器（过滤 `.jlv`，走路径通道）或把 `.jlv` 拖入对话框的拖拽区（`@drop`）。
 - **拖拽取路径（关键坑与回退）**：拖拽时优先用 `File.path` 走路径通道（dev/部分环境可用）；**打包后 `file://` 页面下 Chromium 安全限制会让 `DataTransfer.files[i].path` / `.name` 为空**，导致无法识别 `.jlv` 而误报「仅支持 .jlv」。故 `onDrop` 在拿不到 path 时自动回退「读 `File.arrayBuffer()` → `import-decrypt-bytes` 字节通道」，**任何环境拖拽都能解密**。按钮选择始终走 path 通道（100% 可靠）。
 - **权限**：主进程 `import-decrypt` 首行 `if (!dataKey) return {ok:false, error:'未解锁'}`；未解锁时入口不可达，且 UI 提示先解锁。对应「在有权限的情况下解密该文件」。
-- **解密与预览**：主进程解密到 `temp/渐离App保险箱导入解密/<uuid>.<ext>`，临时路径经 `jlocal:///` 内嵌预览（图片 / PDF / 音频 / 文本；其他类型提示「另存后查看」）；`.jlv` 无类型信息，靠文件头魔数 `guessExt()` 推断扩展名用于预览与默认文件名。
+- **解密与预览**：主进程解密到 `temp/渐离App保险箱导入解密/<uuid>.<ext>`，临时路径经 `jlocal:///` 内嵌预览（图片 / PDF / 音频 / 文本；其他类型提示「另存后查看」）；输出文件名优先级：`.jlv` 内嵌 `name`（新格式）> 拖入/选中的文件名去 `.jlv`（字节/路径通道回退）> `guessExt()` 推断的 `未命名.<ext>`；扩展名同理优先内嵌 `ext`。
 - **另存为明文**：逐项「另存为」→ 原生目录选择 → 主进程 `save-plain` 复制到目标（文件名做 `\/?:*?"<>|` 清洗防穿越）。明文只在用户指定目录落地，符合预期。
 - **非本保险箱**：用其它保险箱 `dataKey` 加密的 `.jlv` 解码时 GCM 认证失败，返回「解密失败：该文件不属于当前保险箱或已损坏」。
 - **彻底清理**：对话框关闭 / 页面卸载均调用 `cleanup-import-decrypt`，清空临时明文目录，防磁盘残留。

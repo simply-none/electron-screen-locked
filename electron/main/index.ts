@@ -8,7 +8,7 @@ import { initBackup } from "./module/backup.ts";
 import { initAppLock } from "./module/appLock.ts";
 import { initTray } from "./module/tray.ts";
 import { initPoetData } from "./module/poetData.ts";
-import { initMainWindow, win } from "./module/mainWindow.ts";
+import { initMainWindow, win, showApp } from "./module/mainWindow.ts";
 import { initNewWindow } from "./module/newWindow.ts";
 import { initSystemInfo } from "./module/systemInfo.ts";
 import { initNetRequest } from "./module/netRequest.ts";
@@ -187,7 +187,12 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   // 首次启动：若通过资源管理器右键带文件参数启动，解析并入队，待渲染端就绪后下发
-  queueCli(parseCliFiles(process.argv));
+  queueCli(
+    parseCliFiles(process.argv, {
+      exePath: process.execPath,
+      appDir: app.getAppPath(),
+    }),
+  );
   createWindow();
 });
 
@@ -198,12 +203,19 @@ ipcMain.on('app:cli-ready', () => {
 
 app.on("second-instance", (_e, argv) => {
   // 资源管理器右键多选会多次触发本事件，聚合后一次性下发
-  const items = parseCliFiles(argv);
+  const items = parseCliFiles(argv, {
+    exePath: process.execPath,
+    appDir: app.getAppPath(),
+  });
   if (items.length) queueCli(items);
   if (win) {
-    // 只允许打开一个窗口
-    if (win.isMinimized()) win.restore();
-    win.focus();
+    // 只允许打开一个窗口。
+    // 注意：应用可能只是被「隐藏到托盘」(win.hide()) 而非最小化，此时
+    // isMinimized() 为 false、focus() 无法让隐藏窗口重新可见，导致右键触发的解密
+    // /加密/安全删除弹窗在后台静默执行、用户完全看不到。
+    // 因此改用 showApp()：无论最小化还是隐藏到托盘，都先确保主窗口可见并置前，
+    // 再下发右键参数。
+    showApp();
     flushPending(win);
   }
 });

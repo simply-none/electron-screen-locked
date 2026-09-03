@@ -144,16 +144,18 @@ export default defineStore('file-vault', () => {
   async function decryptImportFiles(paths: string[]): Promise<{
     ok: number;
     fail: number;
-    items: { source: string; tempPath?: string; ext?: string; error?: string }[];
+    items: { source: string; tempPath?: string; ext?: string; name?: string; error?: string }[];
   }> {
     let ok = 0;
     let fail = 0;
-    const items: { source: string; tempPath?: string; ext?: string; error?: string }[] = [];
+    const items: { source: string; tempPath?: string; ext?: string; name?: string; error?: string }[] = [];
     for (const p of paths) {
       const res = await fileVaultApi.importDecrypt(p);
       if (res.ok && res.tempPath) {
         ok++;
-        items.push({ source: p, tempPath: res.tempPath, ext: res.ext });
+        // .jlv 内嵌了原始文件名则用之；旧格式回退到文件名的去扩展名（去 .jlv）
+        const fallback = p.split(/[\\/]/).pop()?.replace(/\.jlv$/i, '') || '';
+        items.push({ source: p, tempPath: res.tempPath, ext: res.ext, name: res.name || fallback });
       } else {
         fail++;
         items.push({ source: p, error: res.error || '解密失败' });

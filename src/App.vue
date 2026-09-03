@@ -12,6 +12,7 @@ import { sysNotify, appNotify } from '@/utils/notify';
 import useWindowMode from '@/store/useWindowMode';
 import { isHabitReminderId } from '@/store/useHabit';
 import useFileVault, { type CliPendingItem } from '@/views/fileVault/store/useFileVault';
+import FileVaultCliHandler from '@/views/fileVault/components/FileVaultCliHandler.vue';
 
 const router = useRouter()
 const route = useRoute()
@@ -101,9 +102,8 @@ if (!isSecondWindow) {
     appNotify(title, content, 5000, openCountdown);
   });
 
-  // 资源管理器右键菜单：接收文件参数并转发到文件保险箱
+  // 资源管理器右键菜单：接收文件参数，交给全局处理器直接弹对应对话框（不跳转保险箱页面）
   window.ipcRenderer.on('app:cli-open', (_e, item: CliPendingItem) => {
-    router.push({ name: RouteNames.FILE_VAULT }).catch(() => {});
     useFileVault().setPendingCli(item);
   });
   // 告知主进程渲染端已就绪，可下发排队中的右键文件参数（解决首启竞态）
@@ -150,6 +150,9 @@ window.ipcRenderer.on('confirm-hide-app', (event, confirm) => {
       </transition>
     </el-config-provider>
   </router-view>
+
+  <!-- 资源管理器右键菜单全局处理器：直接弹加密/解密/安全删除对话框，不跳转保险箱页 -->
+  <FileVaultCliHandler />
 </template>
 
 <style lang="scss">

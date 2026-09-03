@@ -16,6 +16,8 @@
  * ⚠️ 改动本文件后必须重启 Electron 才生效。
  */
 import { execFileSync, execSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { app, BrowserWindow } from 'electron';
 
 /** 动作类型（与注册表子命令名称、渲染端 action 对齐） */
@@ -174,8 +176,17 @@ export function registerShellMenuElevated(): void {
 
 // ============ 启动参数解析与队列 ============
 
-/** 解析 argv：扫描 --vault-* 标志，其后直到下一个标志的非选项 token 视为文件路径 */
-export function parseCliFiles(argv: string[]): CliItem[] {
+export interface ParseCliOptions {
+  /** 当前 exe 路径，用于排除 argv 中的自身 */
+  exePath?: string;
+  /** 应用目录（dev 模式下注册表命令会传入），用于排除被误当文件的仓库目录 */
+  appDir?: string;
+}
+
+/** 解析 argv：扫描 --vault-* 标志，其后非选项 token 视为文件路径。
+ *  显式排除 exe 路径与应用目录，防止 dev 模式把仓库目录（如 C:\cod\electron-vite-vue）当成待加密文件。
+ */
+export function parseCliFiles(argv: string[], opts: ParseCliOptions = {}): CliItem[] {
   const flagToAction: Record<string, CliAction> = {
     '--vault-encrypt': 'encrypt',
     '--vault-decrypt': 'decrypt',
@@ -183,15 +194,52 @@ export function parseCliFiles(argv: string[]): CliItem[] {
   };
   const items: CliItem[] = [];
   let cur: CliItem | null = null;
-  for (const a of argv) {
+
+  const normalize = (p: string) =>
+    p
+      ?.replace(/\\?\"/g, '')
+      .replace(/\\$/g, '')
+      .toLowerCase();
+  const exclude = new Set<string>();
+  if (opts.exePath) exclude.add(normalize(opts.exePath));
+  if (opts.appDir) exclude.add(normalize(opts.appDir));
+
+  for (const raw of argv) {
+    const a = raw.replace(/^"|"$/g, ''); // 去掉外层引号
+
+    // 跳过 --vault-app-dir=... 等命名参数（值里可能含路径）
+    if (a.startsWith('--vault-app-dir')) continue;
+
     if (flagToAction[a]) {
       cur = { action: flagToAction[a], files: [] };
       items.push(cur);
-    } else if (cur && !a.startsWith('-')) {
-      // 仅收集标志之后的真实文件路径（跳过其它选项/ app 路径等）
-      cur.files.push(a);
+      continue;
     }
+
+    if (!cur) continue; // 标志前的一切 token 都与本功能无关
+    if (a.startsWith('-')) continue; // 其它 Electron/Node 选项
+    if (exclude.has(normalize(a))) continue; // 排除 exe / appDir，防止误收集仓库目录
+
+    cur.files.push(a);
   }
+
+  // 过滤：只保留真实存在的文件（排除目录/不存在路径）。
+  // 这一步是第二道保险，防止注册表/命令行解析异常把仓库目录等目录当成文件传下去。
+  for (const it of items) {
+    it.files = it.files.filter((f) => {
+      try {
+        const st = fs.statSync(path.normalize(f));
+        return st.isFile();
+      } catch {
+        return false;
+      }
+    });
+  }
+
+  if (items.length) {
+    console.log('[shellMenu] parsed cli items:', JSON.stringify(items), 'exclude:', [...exclude]);
+  }
+
   return items.filter((i) => i.files.length > 0);
 }
 

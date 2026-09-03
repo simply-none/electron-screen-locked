@@ -1,14 +1,13 @@
 <template>
   <div class="fv">
     <!-- 未建库：首次设置口令 -->
-    <UnlockView v-if="!store.hasVault" v-model="showUnlock" mode="create" @done="onUnlocked" />
+    <UnlockView v-if="!store.hasVault" v-model="showUnlock" mode="create" />
 
     <!-- 已建库未解锁 -->
     <UnlockView
       v-else-if="store.hasVault && !store.isUnlocked"
       v-model="showUnlock"
       mode="unlock"
-      @done="onUnlocked"
     />
 
     <!-- 已解锁：工具栏 + 文件列表 -->
@@ -51,9 +50,9 @@
       </div>
     </template>
 
-    <ImportDialog v-model="showImport" :initial-files="importInitialFiles" @done="onImported" />
+    <ImportDialog v-model="showImport" @done="onImported" />
     <PreviewDialog v-model="showPreview" :file="previewFile" @export="onExport" @closed="onPreviewClosed" />
-    <DecryptImportDialog v-model="showDecrypt" :initial-files="decryptInitialFiles" />
+    <DecryptImportDialog v-model="showDecrypt" />
   </div>
 </template>
 
@@ -86,11 +85,6 @@ const showDecrypt = ref(false);
 const previewFile = ref<VaultFileMeta | null>(null);
 /** 解锁门（创建/解锁弹窗）显隐：锁定态显示、解锁态隐藏；由 isUnlocked 同步 */
 const showUnlock = ref(true);
-/** 右键菜单预填文件（encrypt 走 ImportDialog，decrypt 走 DecryptImportDialog）；消费后由对应对话框清空 */
-const importInitialFiles = ref<string[]>([]);
-const decryptInitialFiles = ref<string[]>([]);
-/** 右键任务需要「先解锁再执行」时，暂存解锁后的打开动作 */
-const pendingAfterUnlock = ref<null | (() => void)>(null);
 
 /** 自动锁定：空闲阈值（分钟），解锁后启用；切换原生对话框时暂停避免误锁 */
 const idleMinutes = ref(5);
@@ -120,21 +114,12 @@ onMounted(async () => {
   try {
     await store.init();
     if (store.isUnlocked) autoLock.start();
-    // 资源管理器右键带文件启动：进入本页面后消费待处理项（此时 isUnlocked 已准确）
-    if (store.pendingCli) applyPending();
   } catch (e: any) {
     // 状态查询失败不应让页面崩溃，给出可读提示
     ElMessage.error(e?.message || '保险箱状态加载失败');
   }
 });
 
-/** 已在页面上时，右键再次触发（App.vue 重写 pendingCli）→ 立即消费 */
-watch(
-  () => store.pendingCli,
-  (v) => {
-    if (v) applyPending();
-  },
-);
 onUnmounted(() => {
   // 离开页面清理预览/导入解密临时文件与自动锁定监听（锁定态另有主进程清理）
   store.cleanupTemp();
@@ -142,71 +127,14 @@ onUnmounted(() => {
   autoLock.stop();
 });
 
-function onUnlocked() {
-  // 状态已由子组件写入 store，watch 会据此收起解锁门并（若解锁）启动自动锁定
-  // 若右键任务需「先解锁再执行」，在此触发暂存的打开动作
-  if (pendingAfterUnlock.value) {
-    const fn = pendingAfterUnlock.value;
-    pendingAfterUnlock.value = null;
-    fn();
-  }
-}
-
-/** 工具栏「导入加密」：清空右键预填，打开原生多选导入 */
+/** 工具栏「导入加密」：打开原生多选导入 */
 function openImportDialog() {
-  importInitialFiles.value = [];
   showImport.value = true;
 }
 
-/** 工具栏「导入解密」：清空右键预填，打开解密对话框 */
+/** 工具栏「导入解密」：打开解密对话框 */
 function openDecryptDialog() {
-  decryptInitialFiles.value = [];
   showDecrypt.value = true;
-}
-
-/**
- * 消费右键待处理项：
- * - secure-delete：无需解锁，弹确认后调用主进程碎纸机；
- * - encrypt / decrypt：已解锁直接打开对应对话框并预填文件；未解锁先弹解锁门，解锁完成后自动打开。
- */
-function applyPending() {
-  const item = store.pendingCli;
-  if (!item) return;
-  store.clearPendingCli();
-  if (item.action === 'secure-delete') {
-    runSecureDelete(item.files);
-    return;
-  }
-  const open = () => {
-    if (item.action === 'encrypt') {
-      importInitialFiles.value = item.files;
-      showImport.value = true;
-    } else if (item.action === 'decrypt') {
-      decryptInitialFiles.value = item.files;
-      showDecrypt.value = true;
-    }
-  };
-  if (store.isUnlocked) open();
-  else {
-    pendingAfterUnlock.value = open;
-    showUnlock.value = true; // 解锁门已隐藏时重新弹出
-  }
-}
-
-/** 安全删除（碎纸机）：确认后调用主进程 file-vault:secure-delete，无需解锁 */
-async function runSecureDelete(files: string[]) {
-  try {
-    await ElMessageBox.confirm(
-      `确定彻底删除（安全擦除）选中的 ${files.length} 个文件？此操作不可恢复。`,
-      '安全删除',
-      { type: 'warning' },
-    );
-  } catch {
-    return;
-  }
-  const res = await store.secureDeleteFiles(files);
-  if (res.ok) ElMessage.success(`已安全删除 ${res.deleted} 个文件`);
-  else ElMessage.error(res.error || '安全删除失败');
 }
 
 async function onImported() {

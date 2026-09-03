@@ -26,6 +26,8 @@ const CONFIG_KEY = 'vault';
 const CONFIG_TABLE = 'file_vault_config';
 const FILES_TABLE = 'file_vault_files';
 const CIPHER_EXT = '.jlv';
+/** .jlv 自描述格式魔数：iv(12)+ct 之前嵌入原始文件名与扩展名，解决「解密后文件名为未命名」 */
+const JLV_MAGIC = 'JLV1';
 
 /** 主进程内存态：数据密钥 + 口令（lock 时清零） */
 let dataKey: Buffer | null = null;
@@ -73,6 +75,43 @@ function guessExt(buf: Buffer): string {
     if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return '.mp3';
   }
   return '.bin';
+}
+
+/**
+ * 解析 .jlv 密文，兼容两种格式：
+ *  - 新格式（自描述）：`JLV1`(4B) + metaLen(uint32 BE, 4B) + JSON元数据({"name","ext"}) + iv(12B) + ct；
+ *  - 旧格式（历史数据，文件名只在库里）：直接 iv(12B) + ct。
+ * 返回解密所需的 iv/ct，以及嵌入的原始文件名/扩展名（旧格式为 null）。
+ */
+function parseCipher(buf: Buffer): { name: string | null; ext: string | null; iv: string; ct: string } {
+  if (buf.length >= 8 && buf.toString('latin1', 0, 4) === JLV_MAGIC) {
+    const metaLen = buf.readUInt32BE(4);
+    let name: string | null = null;
+    let ext: string | null = null;
+    if (buf.length >= 8 + metaLen && metaLen > 0) {
+      try {
+        const meta = JSON.parse(buf.toString('utf8', 8, 8 + metaLen));
+        if (meta && typeof meta === 'object') {
+          if (typeof meta.name === 'string') name = meta.name;
+          if (typeof meta.ext === 'string') ext = meta.ext;
+        }
+      } catch {
+        /* 元数据损坏则忽略，按无名字处理 */
+      }
+    }
+    const payload = buf.subarray(8 + metaLen);
+    return { name, ext, iv: payload.subarray(0, 12).toString('base64'), ct: payload.subarray(12).toString('base64') };
+  }
+  // 旧格式：前 12 字节即 iv
+  return { name: null, ext: null, iv: buf.subarray(0, 12).toString('base64'), ct: buf.subarray(12).toString('base64') };
+}
+
+/** 拼接新格式 .jlv 头部（魔数 + 元数据长度 + JSON 元数据） */
+function buildJlvHeader(name: string, ext: string): Buffer {
+  const meta = Buffer.from(JSON.stringify({ name, ext }), 'utf8');
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(meta.length);
+  return Buffer.concat([Buffer.from(JLV_MAGIC, 'latin1'), len, meta]);
 }
 
 async function getConfig(): Promise<VaultConfig | null> {
@@ -261,7 +300,10 @@ export function initFileVault() {
         const e = encryptBytes(buf, dataKey);
         const id = crypto.randomUUID();
         const cipherPath = path.resolve(vaultDir(), id + CIPHER_EXT);
-        fs.writeFileSync(cipherPath, Buffer.concat([Buffer.from(e.iv, 'base64'), Buffer.from(e.ct, 'base64')]));
+        // 自描述格式：头部嵌入原始文件名+扩展名，便于「右键解密 .jlv」时还原文件名（旧 .jlv 仅有 iv+ct 无名字）
+        const header = buildJlvHeader(displayName, ext);
+        const payload = Buffer.concat([Buffer.from(e.iv, 'base64'), Buffer.from(e.ct, 'base64')]);
+        fs.writeFileSync(cipherPath, Buffer.concat([header, payload]));
         const row = {
           id,
           name: encryptName(displayName),
@@ -305,8 +347,7 @@ export function initFileVault() {
         if (!rows || !rows.length) return { ok: false, error: '文件不存在' };
         const r = rows[0];
         const enc = fs.readFileSync(r.ciphertext_path);
-        const iv = enc.subarray(0, 12).toString('base64');
-        const ct = enc.subarray(12).toString('base64');
+        const { iv, ct } = parseCipher(enc);
         const plain = decryptBytes({ iv, ct }, dataKey);
         const outName = `${decryptName(r.name)}${r.ext || ''}`;
         const outPath = path.resolve(destDir, outName);
@@ -326,8 +367,7 @@ export function initFileVault() {
       if (!rows || !rows.length) return { ok: false, error: '文件不存在' };
       const r = rows[0];
       const enc = fs.readFileSync(r.ciphertext_path);
-      const iv = enc.subarray(0, 12).toString('base64');
-      const ct = enc.subarray(12).toString('base64');
+      const { iv, ct } = parseCipher(enc);
       const plain = decryptBytes({ iv, ct }, dataKey);
       const outName = `${crypto.randomUUID()}_${decryptName(r.name)}${r.ext || ''}`;
       const outPath = path.resolve(tempDir(), outName);
@@ -383,14 +423,13 @@ export function initFileVault() {
     try {
       const buf = fs.readFileSync(sourcePath);
       if (buf.length < 12 + 16) return { ok: false, error: '文件不是有效的加密文件' };
-      const iv = buf.subarray(0, 12).toString('base64');
-      const ct = buf.subarray(12).toString('base64');
+      const { name, ext: embeddedExt, iv, ct } = parseCipher(buf);
       const plain = decryptBytes({ iv, ct }, dataKey); // 非本保险箱会抛错（GCM 认证失败）
-      const ext = guessExt(plain);
+      const ext = embeddedExt || guessExt(plain);
       const outName = `${crypto.randomUUID()}${ext}`;
       const outPath = path.resolve(importDecryptTempDir(), outName);
       fs.writeFileSync(outPath, plain);
-      return { ok: true, tempPath: outPath, ext };
+      return { ok: true, tempPath: outPath, ext, name: name ?? undefined };
     } catch {
       return { ok: false, error: '解密失败：该文件不属于当前保险箱或已损坏' };
     }
@@ -406,15 +445,16 @@ export function initFileVault() {
       try {
         const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer as ArrayBuffer);
         if (buf.length < 12 + 16) return { ok: false, error: '文件不是有效的加密文件' };
-        const iv = buf.subarray(0, 12).toString('base64');
-        const ct = buf.subarray(12).toString('base64');
+        const { name: embeddedName, ext: embeddedExt, iv, ct } = parseCipher(buf);
         const plain = decryptBytes({ iv, ct }, dataKey); // 非本保险箱会抛错（GCM 认证失败）
-        const ext = guessExt(plain);
+        const ext = embeddedExt || guessExt(plain);
+        // 优先用 .jlv 内嵌的原始文件名；无内嵌（旧格式）时回退到拖入文件的显示名（去 .jlv）
         const base = (name || '').replace(/\.jlv$/i, '');
+        const finalName = embeddedName || base || null;
         const outName = `${crypto.randomUUID()}_${base}${ext}`;
         const outPath = path.resolve(importDecryptTempDir(), outName);
         fs.writeFileSync(outPath, plain);
-        return { ok: true, tempPath: outPath, ext, name: base };
+        return { ok: true, tempPath: outPath, ext, name: finalName ?? undefined };
       } catch {
         return { ok: false, error: '解密失败：该文件不属于当前保险箱或已损坏' };
       }
