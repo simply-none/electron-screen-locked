@@ -13,6 +13,9 @@
         <button class="tl-new" title="新建主题" @click="openCreate">
           <LucideIcon name="Plus" :size="16" />
         </button>
+        <button class="tl-export" title="导出主题" @click="openExportDialog">
+          <LucideIcon name="Download" :size="16" />
+        </button>
       </div>
     </div>
 
@@ -126,12 +129,23 @@
           <LucideIcon name="Pencil" :size="14" />
           修改主题
         </button>
+        <button class="ctx-item" @click="ctxExportAll">
+          <LucideIcon name="Download" :size="14" />
+          导出所有
+        </button>
         <button class="ctx-item danger" @click="ctxDelete">
           <LucideIcon name="Trash2" :size="14" />
           删除主题
         </button>
       </div>
     </Teleport>
+
+    <!-- 勾选导出主题弹窗 -->
+    <ExportThemesDialog
+      :visible="exportDialogVisible"
+      @update:visible="exportDialogVisible = $event"
+      @confirm="onExportConfirm"
+    />
   </aside>
 </template>
 
@@ -141,6 +155,11 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 import LucideIcon from '@/components/LucideIcon.vue';
 import TagChip from './TagChip.vue';
 import TagSelector from './TagSelector.vue';
+import ExportThemesDialog from './ExportThemesDialog.vue';
+import { exportThemeToMarkdown, exportThemesToMarkdown } from '../utils/exportMarkdown';
+import { fileNotify } from '@/utils/fileNotify';
+import { storeToRefs } from 'pinia';
+import useCacheSetStore from '@/store/useCacheSet';
 import { useThemeConversation } from '../composables/useThemeConversation';
 
 const {
@@ -159,6 +178,9 @@ const {
   toggleCollapse,
   openSubThemeDialog,
 } = useThemeConversation();
+
+// 文件缓存目录（设置项 fileCachePath，导出默认落盘到此）
+const { fileCachePathC } = storeToRefs(useCacheSetStore());
 
 const dialogVisible = ref(false);
 const editingId = ref<number | null>(null);
@@ -246,6 +268,33 @@ function ctxDelete() {
   if (t) removeTheme(t);
 }
 
+/** 右键「导出所有」：导出该主题自身的全部对话为 Markdown（直接写入缓存目录，不弹窗） */
+async function ctxExportAll() {
+  const t = ctxMenu.value.theme;
+  closeCtxMenu();
+  if (!t) return;
+  const res = await exportThemeToMarkdown(t, fileCachePathC.value);
+  if (res?.success) fileNotify({ title: `已导出主题「${t.title || '未命名'}」`, filePath: res.path });
+  else ElMessage.error(res?.message || '导出失败');
+}
+
+/** 勾选导出弹窗可见态 */
+const exportDialogVisible = ref(false);
+
+/** 头部「导出主题」按钮：打开勾选弹窗 */
+function openExportDialog() {
+  exportDialogVisible.value = true;
+}
+
+/** 弹窗确认：按勾选 id 映射主题对象，批量合并导出（直接写入缓存目录，不弹窗） */
+async function onExportConfirm(ids: number[]) {
+  const selected = themes.value.filter((t) => ids.includes(t.id));
+  if (!selected.length) return;
+  const res = await exportThemesToMarkdown(selected, fileCachePathC.value);
+  if (res?.success) fileNotify({ title: `已导出 ${selected.length} 个主题`, filePath: res.path });
+  else ElMessage.error(res?.message || '导出失败');
+}
+
 async function removeTheme(theme: any) {
   try {
     await ElMessageBox.confirm(
@@ -321,7 +370,8 @@ async function submit() {
   }
 
   .tl-new,
-  .tl-clear {
+  .tl-clear,
+  .tl-export {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -335,7 +385,8 @@ async function submit() {
     transition: background 0.2s, color 0.2s;
   }
 
-  .tl-new:hover {
+  .tl-new:hover,
+  .tl-export:hover {
     background: var(--color-primary-light);
     color: var(--color-primary);
   }

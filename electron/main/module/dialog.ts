@@ -10,6 +10,7 @@ import { globby } from 'globby'
 import fastGlob from 'fast-glob'
 import { execSync, exec } from "child_process";
 import colors from 'colors';
+import { store } from "./store.ts";
 // 扫描进程worker
 let scanWorker;
 
@@ -794,6 +795,36 @@ export function exportDataToJson(data: any, path: string) {
   }
 }
 
+/** ElectronStore 最小接口，避免直接耦合类型 */
+interface ElectronStoreLike {
+  get(key: string): any;
+}
+
+/**
+ * 导出纯文本（如主题对话 Markdown）到缓存目录，不弹保存框。
+ * 目录优先级：入参 dir（渲染端 fileCachePathC）→ electron-store 的 fileCachePath 设置 → 用户文档目录。
+ * @param text     文本内容
+ * @param filename 文件名（不含目录）
+ * @param dir      可选，指定缓存目录；缺省时回退到设置项/文档目录
+ * @returns { success, path?, message? }
+ */
+export function exportTextToCache(
+  text: string,
+  filename: string,
+  dir?: string
+): { success: boolean; path?: string; message?: string } {
+  try {
+    const targetDir =
+      dir || (store as ElectronStoreLike).get?.("fileCachePath") || app.getPath("documents");
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    const fullPath = path.resolve(targetDir, filename);
+    fs.writeFileSync(fullPath, text, "utf8");
+    return { success: true, path: fullPath };
+  } catch (err: any) {
+    return { success: false, message: err?.message || String(err) };
+  }
+}
+
 export function openFileInAssetsManager(filePath: string) {
   const fullPath = filePath.replace(/\//g, '\\');
   if (process.platform === 'win32') {
@@ -862,6 +893,11 @@ export function initFile() {
   // 数据保存
   ipcMain.on("export-data-to-json", (e, { data, path }) => {
     e.returnValue = exportDataToJson(data, path);
+  });
+
+  // 导出纯文本（Markdown 等）到缓存目录，不弹保存框，返回完整路径
+  ipcMain.on("export-text-to-cache", (e, { text, filename, dir }) => {
+    e.returnValue = exportTextToCache(text, filename, dir);
   });
 
   ipcMain.on("open-file-in-assets-manager", (e, { path }) => {
