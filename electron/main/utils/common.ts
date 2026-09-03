@@ -48,19 +48,26 @@ export function getObjectKeys(objArr: ObjectType[] | ObjectType) {
   return [...new Set(keys)]
 }
 
-// 将一个对象数组[{ key: value: JSON.string()}]，转换为{ key: JSON.parse(value) }
+// 将一个对象数组[{ key, value }] 转换为 { key: value }
+// 约定：value 为 JSON 序列化字符串时解析回对象；但部分偏好（如保险库“上次路径”）
+// 直接以纯字符串（文件路径等）存储，这类非 JSON 字符串应原样保留，不应 JSON.parse 报错。
 export function objectArrayToObject(objArr: ObjectType[]) {
   const obj = {}
   objArr.forEach(item => {
-    try {
-      // 判断是否是字符串
-      if (typeof item.value === 'string') {
-        obj[item.key] = JSON.parse(item.value)
-      } else {
-        obj[item.key] = item.value
+    if (typeof item.value === 'string') {
+      const v = item.value.trim()
+      // 仅对“看起来像 JSON”的字符串尝试解析（以 { [ " 数字 true/false/null 开头），
+      // 纯字符串（如 C:\...\xxx.json 路径）直接保留原值，避免非法 JSON 抛错 / 刷屏。
+      if (v && '{"[0123456789tfbn'.includes(v[0])) {
+        try {
+          obj[item.key] = JSON.parse(v)
+          return
+        } catch (e) {
+          console.error('[objectArrayToObject] 值疑似 JSON 但解析失败，保留原值:', item.key, e)
+        }
       }
-    } catch (e) {
-      console.error(e, 'e', item.value)
+      obj[item.key] = item.value
+    } else {
       obj[item.key] = item.value
     }
   })

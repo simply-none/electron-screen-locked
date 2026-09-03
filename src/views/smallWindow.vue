@@ -38,7 +38,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import useTipsRuntime from '@/store/useTipsRuntime';
 import { useTipsActions } from '@/store/useTipsActions';
-import { useNewReminder } from '@/store/useNewReminder';
+import useNewReminder from '@/store/useNewReminder';
 import { isInIdlePeriod } from '@/utils/idleTime';
 import { storeToRefs } from 'pinia';
 import LucideIcon from '@/components/LucideIcon.vue';
