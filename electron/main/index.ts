@@ -45,6 +45,7 @@ import { initPasswordVault } from "./module/passwordVault.ts";
 import { initFileVault } from "./module/fileVault.ts";
 import {
   registerShellMenu,
+  initShellMenu,
   parseCliFiles,
   queueCli,
   flushPending,
@@ -57,17 +58,6 @@ registerJlocalProtocolBefore()
 
 app.setName(appName);
 app.commandLine.appendSwitch("lang", "zh-CN");
-
-// 处理右键菜单提权注册：命中 --register-shell-menu-elevated 时只写注册表然后退出，
-// 不进入正常 App 生命周期，避免单实例锁与窗口初始化。
-const elevatedIdx = process.argv.indexOf('--register-shell-menu-elevated');
-if (elevatedIdx !== -1) {
-  const next = process.argv[elevatedIdx + 1];
-  const appDir = next && !next.startsWith('-') ? next.replace(/^"|"$/g, '') : undefined;
-  registerShellMenu({ packaged: !appDir, appDir });
-  app.quit();
-  process.exit(0);
-}
 
 crashReporter.start({ submitURL: "", uploadToServer: false });
 
@@ -179,8 +169,10 @@ async function createWindow() {
   initPasswordVault();
   // 私密文件保险箱模块（复用 2FA / 密码保险库的 AES-256-GCM + PBKDF2 安全架构）
   initFileVault();
-  // 资源管理器右键菜单（Windows 专属）：注册「通过渐离App打开」折叠子菜单
+  // 资源管理器右键菜单（Windows 专属）：注册「通过渐离App打开」菜单（按扩展名限定 + 打开方式 ProgID）
   registerShellMenu();
+  // 右键菜单管理 IPC（启用集合 / 默认打开 / 重新注册）
+  initShellMenu();
   // PDF 工具箱模块（本地离线 PDF 合并/拆分/组织/导出）
   initPdf();
 }

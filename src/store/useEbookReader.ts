@@ -303,6 +303,13 @@ export default defineStore('ebook-reader', () => {
     setStore(CURRENT_FILE_KEY, file);
   }
 
+  // 右键「用渐离阅读」外部打开待处理文件列表（App.vue 写入，ebookReader/index.vue 挂载/监听后消费）
+  const pendingOpenFiles = ref<string[]>([]);
+  /** 请求从外部（资源管理器右键）打开电子书：记录后由阅读器视图消费并入库 */
+  function requestOpenExternal(files: string[]): void {
+    pendingOpenFiles.value = Array.isArray(files) ? files.filter(Boolean) : [];
+  }
+
   /**
    * 设置当前阅读进度，并同步持久化到本地存储
    * @param val 阅读进度信息，包含 CFI 定位与百分比
@@ -854,6 +861,9 @@ export default defineStore('ebook-reader', () => {
     deleteBgImage,
     // 设置当前文件
     setCurrentFile,
+    // 右键外部打开（用渐离阅读）
+    pendingOpenFiles,
+    requestOpenExternal,
     // 设置阅读进度
     setProgress,
     // 按书设置/读取阅读进度（本地映射兜底）

@@ -22,6 +22,14 @@
 
 21. **单一提醒引擎（2026-09-03 统一）**：原 newReminder（setTimeout）与 job.ts+recurrence.ts（cron）的待办截止提醒已统一为 newReminder 引擎——待办截止提醒写成 `reminders` 表 `source='todo'` 行由 `syncTodoReminders()` 调度，`get-tips` 已过滤系统行，`update-todo-reminders` IPC 现由 newReminder 监听。job.ts 仅留工作/休息定时器（`createJob`/`startJobFn`）。清理 todo 行走 `query` 列出 + `del`，**勿用 `new-sql:execute`**；`source`/`refKey` 列由 upsert 自动补，勿手动加列。改 newReminder/job.ts/recurrence.ts 均须重启 Electron。
 
+22. **统一右键菜单已重构（2026-09-04）**：旧 HKLM CommandStore 级联 + HKCU 扁平 fallback + UAC `--register-shell-menu-elevated` 方案已废弃，改为 `shellMenu.ts` 按 `SUB_COMMANDS.exts` 逐扩展名写 HKCU（无需管理员）。`registerShellMenuElevated()` 现仅调 `registerShellMenu()`，无 PowerShell 提权、无参数拦截。新增动作 `open-reader` / `pdf-*`(5) / `batch-rename` 经 `app:cli-open` 按 `action` 分流到各模块 store；启用/默认打开集合存 `basic_info`，设置页 `fileRela/ShellMenuManager.vue` 管理。`CliItem.action` 已扩展为 10 种，渲染端 `App.vue` 的 `switch(action)` 必须随 `CliAction` 同步——新增 action 若漏加 case 会静默无响应（不报错但功能不触发）。改 `shellMenu.ts` / `index.ts` 须重启 Electron。
+
+23. **右键菜单启用集合须迁移并集（2026-09-03 修复）**：`shellMenu.ts` 的 `getEnabledIds()` 曾原样把持久化 `basic_info.shellMenuEnabled` 当启用集合、无并集兜底，且模块级缓存；`registerShellMenu()` 循环 `if(!enabled.has(s.id)) continue` 会把不在集合内的命令整条跳过、不写注册表。若用户旧版持久化的是较小集合（如仅 3 个保险箱 id，或漏了后加的 `JianliApp.PdfCompress`），升级后该批新增命令右键菜单根本不出现、点击无反应（根因即「PDF 几个动作没触发」）。已修复：引入 `SHELL_MENU_SCHEMA` 版本标记 + `LEGACY_IDS`（传统 3 命令 `Encrypt/Decrypt/SecureDelete` 尊重旧开关，其余新增命令默认启用）做一次性迁移并写回 `basic_info`；`schema` 达标后完全信任用户开关（含其手动关闭的新命令，重启不再被恢复）。**新增右键动作时务必把 id 加进 `SUB_COMMANDS`**；若属「新增命令」须在 `getEnabledIds` 迁移分支默认启用，并视情况把 `SHELL_MENU_SCHEMA` +1，否则旧存档会漏注册。改 `shellMenu.ts` 须重启 Electron 才会重跑 `registerShellMenu()`。
+
+24. **迁移写回禁用 `upsert`（嵌套事务坑，2026-09-04 修复）**：`getEnabledIds()` 的迁移写回最初用 `newSql.upsert`（`upsert` 强制 `BEGIN TRANSACTION`），而它在启动期 `registerShellMenu()` 第一次调用时就触发，与当时尚未提交的初始化事务在共享单连接上交错 → `SQLITE_ERROR: cannot start a transaction within a transaction`（异步 Promise reject 且 `try/catch` 抓不到，表现为 `Unhandled rejection`）。已改为裸 `db.run('INSERT OR REPLACE INTO basic_info (key,value) VALUES (?,?)')`（无 `BEGIN`，并入已有事务随其提交），并抽 `saveBasicInfoKV()` 复用于 `shell-menu:set-default-open`。教训：**绝不在启动注册热路径用 `upsert` 写回**；任何 basic_info 元信息写回若可能在启动期发生，都用单行非事务写。`dist-electron` 改动须重新 `vite build` 才生效。
+
+25. **注册后须通知 Explorer 刷新外壳缓存（2026-09-04 新增）**：`registerShellMenu()` 末尾调用 `notifyShellRefresh()`（powershell P/Invoke `SHChangeNotify(SHCNE_ASSOCCHANGED)`）让资源管理器重新加载 shell 关联，否则新注册/取消的右键菜单项需手动重启资源管理器才显示。该调用 fire-and-forget + `try/catch` 包裹，失败不影响注册本体。
+
 ## 维护建议
 - 每次大改动后更新对应 `references/modules/*.md` 与 `risks.md`，保持 skill 与代码同步。
 - skill 内容会随代码演进过时，把它作为「项目知识基线」，发现不符就改。

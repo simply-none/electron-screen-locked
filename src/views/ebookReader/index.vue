@@ -1309,6 +1309,12 @@ onMounted(() => {
   loadBookshelf().then(() => refreshCounts());
   // 监听全屏变化（ESC 退出等），同步沉浸状态
   document.addEventListener('fullscreenchange', onFsChange);
+  // 右键「用渐离阅读」外部打开：挂载时若有待打开文件则入库并打开（App.vue 已写入 store）
+  const ext = ebookStore.pendingOpenFiles.slice();
+  if (ext.length) {
+    ebookStore.pendingOpenFiles = [];
+    openExternalFiles(ext);
+  }
 });
 
 onUnmounted(() => {
@@ -1364,6 +1370,28 @@ watch(
         isFullscreen.value = false;
         if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
       }
+    }
+  }
+);
+
+// 右键「用渐离阅读」外部打开：路由已切到阅读器但组件已挂载时，消费后续到达的文件
+function openExternalFiles(files: string[]): void {
+  for (const p of files) {
+    const lower = p.toLowerCase();
+    const format: 'txt' | 'epub' | 'pdf' = lower.endsWith('.pdf')
+      ? 'pdf'
+      : lower.endsWith('.txt')
+        ? 'txt'
+        : 'epub';
+    loadFile(p, p.replace(/^.*[\\/]/, ''), format);
+  }
+}
+watch(
+  () => ebookStore.pendingOpenFiles,
+  (files) => {
+    if (files && files.length) {
+      ebookStore.pendingOpenFiles = [];
+      openExternalFiles(files);
     }
   }
 );

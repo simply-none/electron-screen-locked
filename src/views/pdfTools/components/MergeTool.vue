@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import LucideIcon from '@/components/LucideIcon.vue';
 import FileDropZone from './FileDropZone.vue';
@@ -39,6 +39,12 @@ import type { PdfFileItem, PdfActionResult } from '../types';
 
 const store = usePdfTools();
 const files = ref<PdfFileItem[]>([]);
+
+// 右键「PDF 合并」外部打开：挂载时预载传入的多个 PDF
+onMounted(() => {
+  const f = store.consumePendingFiles();
+  if (f.length) onSelect(f);
+});
 const result = ref<PdfActionResult | null>(null);
 const loading = ref(false);
 const dragIndex = ref<number>(-1);

@@ -67,27 +67,26 @@
 ## 命令面板入口
 - `FILE_VAULT` 路由已在 `layoutRouters` 内，命令面板 `routeSource` 自动派生该入口——搜「保险箱 / fileVault」即可直达，无需在 `actionSource.ts` 重复登记。
 
-## 资源管理器右键菜单（③ 新增）
-- **目标**：Windows 资源管理器右键任意文件出现「通过渐离App打开」菜单，把文件交给保险箱对应流程，无需手动打开 App 再导入。
-- **注册（Windows 专属）**：新增主进程模块 `electron/main/module/shellMenu.ts`（`registerShellMenu()`），在 `createWindow()` + `initFileVault()` 之后调用。
-  - **Windows 11 真正支持折叠子菜单的唯一纯注册表方案是 `SubCommands` + `HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell`（需管理员）**；per-user 本地 `shell\<id>` 只能得到箭头却无法展开（已踩坑）。
-  - `registerShellMenu()` 逻辑：**先尝试 HKLM CommandStore 级联**（父菜单 `HKCU\*\shell\JianliApp` 的 `MUIVerb`=「通过渐离App打开」+ `SubCommands`=`JianliApp.Encrypt;JianliApp.Decrypt;JianliApp.SecureDelete` 引用 HKLM 子命令）；**无权限则自动 fallback 为三个独立 HKCU 一级菜单**（`HKCU\*\shell\JianliApp.JianliApp.Encrypt|Decrypt|SecureDelete`，显示名「通过渐离App打开：加密到保险箱」等），功能等价但无折叠。
-  - 命令格式：`"<exe>" [<仓库目录>] --vault-encrypt/--vault-decrypt/--vault-secure-delete "%1"`（dev 下 `process.execPath` 是 electron.exe，需额外传仓库目录）。
-  - `registerShellMenuElevated()`：用 `PowerShell Start-Process -Verb runAs` 提权启动自身 `--register-shell-menu-elevated` 参数；`index.ts` 在 `requestSingleInstanceLock` 之前拦截该参数，仅执行 `registerShellMenu()` 然后 `app.quit()`，不进入正常 App 生命周期。
-  - **dev / 打包模式均自动注册**；`scripts/register-shell-menu-dev.cjs` 作为手动兜底：`--cascading`（UAC 提权 HKLM 级联）/ 默认（HKCU 扁平三项）/ `--unregister`。
-- **启动参数路由**：`app.on('second-instance')` 改造为解析 argv 里的 `--vault-*` 标志（`parseCliFiles`），连同首次启动的 `process.argv` 一起入队 `queueCli`；渲染端主窗口就绪后主进程 `flushPending(win)` 经 `app:cli-open` 逐条下发。多选文件会多次触发 `second-instance` → 队列聚合成一批，规避「`%1` 只传首文件」的坑。
-  - **防误收集仓库目录**：dev 模式下注册表命令形如 `"<electron.exe>" "<仓库目录>" --vault-encrypt "%1"`，`parseCliFiles` 必须显式排除 `process.execPath` 与 `app.getAppPath()`，并在最后把结果过滤为「真实存在的文件（`fs.statSync(...).isFile()`）」，否则会把仓库目录当成待加密文件列出来（曾导致右键加密时多出一个 `electron-vite-vue` 代码库项）。index.ts 调用 parseCliFiles 时传入 `{ exePath: process.execPath, appDir: app.getAppPath() }`。
-  - **首启竞态**：渲染端 `App.vue` 挂载后 `send('app:cli-ready')`，主进程 `ipcMain.on('app:cli-ready')` 时再 `flushPending(win)`，避免「消息早于监听注册」丢失。
-  - **应用隐藏到托盘时必须先 `showApp()`**：`second-instance` 里若仅 `if(win.isMinimized()) win.restore(); win.focus();`，当 App 被「隐藏到托盘」（`hideApp()` → `win.hide()`）时 `isMinimized()` 为 false、`focus()` 无法让隐藏窗口重新可见，右键触发的解密/加密/安全删除弹窗会在后台静默执行、用户完全看不到。故 `second-instance` 必须改用 `mainWindow.ts` 的 `showApp()`（无论最小化还是隐藏到托盘都先 `restore`+`show`+`focus`），再 `flushPending(win)`。
-- **渲染端接线（不再跳转保险箱页）**：`App.vue` 常驻监听 `app:cli-open` → **仅** `store.setPendingCli(item)`（已移除 `router.push(FILE_VAULT)`，避免强制跳转到保险箱列表页）；新增全局组件 `components/FileVaultCliHandler.vue`（常驻 `App.vue` 模板根级）`watch(pendingCli)` 消费：
-  - `secure-delete` → 直接 `ElMessageBox.confirm` 后调 `file-vault:secure-delete`（**无需解锁、不跳转**）；
-  - `encrypt` → 已解锁直接弹 `ImportDialog`（传 `initialFiles` 预填，复用 `importFiles` + 默认安全删除源文件）；未解锁（或从未创建）先弹全局 `UnlockView`，解锁成功后由 `onUnlocked` 自动打开 `ImportDialog`；
-  - `decrypt` → 已解锁直接弹 `DecryptImportDialog`（传 `initialFiles` 预填，复用 `import-decrypt*`）；未解锁先弹解锁门，解锁后自动打开。
-  - 这样右键任意文件即可**直接执行**保险箱对应功能；涉及解锁的「解锁后自动继续」，而非一次性不处理。
-- **保险箱页 `index.vue`**：仅保留「手动进入页面后的解锁门 + 工具栏导入/解密/锁定 + 列表预览导出删除」，已移除全部右键 `pendingCli` / `applyPending` 逻辑（右键值由全局处理器独占消费，避免重复触发）。
-- **新增主进程文件**：`electron/main/module/shellMenu.ts`（HKLM 级联注册 + HKCU 扁平 fallback + UAC 提权 + 启动参数解析/队列；dev / 打包均自动注册）；`fileVault.ts` 仅新增 `file-vault:secure-delete` 一个 IPC。
-- **新增渲染端组件**：`components/FileVaultCliHandler.vue`（右键全局处理器，常驻 App.vue）。
-- **改动文件**：`electron/main/index.ts`（注册 + `--register-shell-menu-elevated` 拦截 + second-instance + cli-ready + 首启 argv）、`api/fileVaultApi.ts`（secureDelete）、`store/useFileVault.ts`（pendingCli/setPendingCli/clearPendingCli/secureDeleteFiles）、`App.vue`（cli-open 改为仅 setPendingCli + 挂载 FileVaultCliHandler，移除 router.push）、`FileVaultCliHandler.vue`（新增，右键全局处理）、`index.vue`（移除右键处理，保留手动解锁门/工具栏）、`ImportDialog.vue`/`DecryptImportDialog.vue`（initialFiles prop）。
+## 资源管理器右键菜单（统一，已重构 2026-09-04）
+- **目标**：Windows 资源管理器右键出现「通过渐离App打开」菜单，覆盖多模块——保险箱（加密/解密/安全删除）、渐离阅读（epub/pdf/txt）、PDF 工具箱（压缩/拆分/合并/提取附件/转图片）、批量重命名——无需手动打开 App 再导入。
+- **归属**：统一由主进程 `electron/main/module/shellMenu.ts` 实现，不再局限于保险箱；各模块只负责消费自己的 `action`（见 `modules/file-rela.md` / `pdf-tools.md` / `ebook-reader.md` 的「右键外部文件入口」小节）。
+- **注册（Windows 专属，无需管理员）**：`registerShellMenu()` 在 `createWindow()` 后调用（`index.ts` 启动处），改用**按扩展名写 HKCU** 方案：
+  - 命令定义集中在 `SUB_COMMANDS`（10 条），每条带 `exts`（含 `*` 表示所有文件）；注册时 `ext==='*'` 写 `HKCU\*\shell`，否则逐扩展名写 `HKCU\<ext>\shell`，菜单更干净（`.mobi` 等不支持格式不显示）。
+  - **不再写 HKLM CommandStore 级联**（旧方案需管理员、折叠菜单在 Win11 有坑）；现纯 HKCU，无 UAC 提权。`registerShellMenuElevated()` 现仅直接调用 `registerShellMenu()`（保留入口供设置页「重新注册」复用），**已无 `--register-shell-menu-elevated` 参数拦截 / PowerShell 提权**。
+  - 启用集合从 `basic_info.shellMenuEnabled`（缺省全开）读取，仅注册启用项；`cleanupLegacy()` 会清理 `*` 父菜单 / 扁平项 / 旧 HKLM CommandStore / 按扩展名叶子 / 阅读器 ProgID 等历史结构。
+- **「用渐离阅读」打开方式 + 默认打开**：额外注册 ProgID `JianliApp.<ext>`（`HKCU\Software\Classes\JianliApp.<ext>`）并写入 `<ext>\OpenWithProgids`，使其出现在「打开方式」列表；仅当用户在设置页手动「设为默认打开 ext」时才把 `<ext>` 的默认值设为该 ProgID（`setDefaultOpen`），可经同一开关撤销，不抢占系统默认。双击关联持久化于 `basic_info.shellMenuDefaultOpen`。
+- **启动参数路由**：`app.on('second-instance')` 解析 argv 里的 `--vault-*` / `--open-reader` / `--pdf-*` / `--batch-rename` 标志（`parseCliFiles`，依据 `flagToAction` 映射 `action`），连同首启 `process.argv` 入队 `queueCli`；渲染端主窗口就绪后主进程 `flushPending(win)` 经 `app:cli-open` 逐条下发。`CliAction` 枚举现为 10 种。
+  - **防误收集仓库目录**：dev 模式命令形如 `"<electron.exe>" "<仓库目录>" --flag "%1"`，`parseCliFiles` 显式排除 `process.execPath` 与 `app.getAppPath()`，并在末尾过滤为「真实存在的文件（`fs.statSync(...).isFile()`）」，否则会把仓库目录当成待处理文件（曾导致右键加密多出 `electron-vite-vue` 代码库项）。index.ts 调用时传入 `{ exePath: process.execPath, appDir: app.getAppPath() }`。
+  - **首启竞态**：渲染端 `App.vue` 挂载后 `send('app:cli-ready')`，主进程 `ipcMain.on('app:cli-ready')` 时再 `flushPending(win)`，避免消息早于监听注册丢失。
+  - **应用隐藏到托盘必须先 `showApp()`**：`second-instance` 改用 `mainWindow.ts` 的 `showApp()`（无论最小化或隐藏到托盘都先 `restore`+`show`+`focus`），再 `flushPending(win)`，否则右键触发的弹窗在后台静默执行、用户看不到。
+- **渲染端分发（按 action 路由，不跳页）**：`App.vue` 常驻监听 `app:cli-open`，`switch(item.action)`：
+  - `encrypt` / `decrypt` / `secure-delete` → `useFileVault().setPendingCli({action, files})`（全局 `FileVaultCliHandler.vue` 消费，不跳页）；
+  - `open-reader` → `useEbookReader().requestOpenExternal(files)` + 跳 `EBOOK_READER`；
+  - `pdf-*`（5 项）→ `usePdfTools().pendingFiles=files` + `openTool(tool)` + 跳 `PDF_TOOLS`；
+  - `batch-rename` → `useFileRela().setPendingRenameFiles(files)` + 跳 `FILE_RELA`。
+- **设置页管理（新增）**：`src/views/fileRela/ShellMenuManager.vue`（挂在 fileRela 内「右键菜单管理」子页）列出 `SUB_COMMANDS` 每项的启用开关（存 `basic_info.shellMenuEnabled`）与「用渐离阅读」各扩展名的「设为默认打开」开关（存 `shellMenuDefaultOpen`），变更经 IPC `shell-menu:set-enabled` / `shell-menu:set-default-open` / `shell-menu:reregister` 即时重注册。`initShellMenu()` 在 `index.ts` 应用就绪后注册这些 IPC。
+- **保险箱页 `index.vue`**：仅保留手动解锁门 + 工具栏导入/解密/锁定 + 列表预览导出删除；右键值由全局 `FileVaultCliHandler.vue` 独占消费（见上 `setPendingCli` 分支），已无 `router.push(FILE_VAULT)`。
+- **改动文件**：`electron/main/module/shellMenu.ts`（重写：SUB_COMMANDS + 按扩展名注册 + 默认打开 ProgID + initShellMenu IPC）、`electron/main/index.ts`（启动处 `initShellMenu()` + `registerShellMenu()`，移除 `--register-shell-menu-elevated` 拦截）、`App.vue`（cli-open 按 action 分发）、`store/useFileVault.ts`（pendingCli）、`store/useEbookReader.ts`（requestOpenExternal / pendingOpenBooks）、`store/usePdfTools.ts`（pendingFiles / consumePendingFiles）、`store/useFileRela.ts`（pendingRenameFiles + 启用集合读写）、各消费视图、新增 `fileRela/ShellMenuManager.vue`。
 
 ## 导入解密（拖拽 / 选择 .jlv）
 - **定位**：「导出解密」的逆通路——把磁盘上的 `.jlv`（来自本保险箱的导出 / 备份 / 另存）恢复为明文。

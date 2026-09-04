@@ -31,5 +31,10 @@
 - `job.ts` 现仅保留工作/休息定时器（`createJob`/`startJobFn`，cron）；待办截止提醒的 cron 调度已并入 newReminder（`syncTodoReminders`），`recurrence.ts` 每日 00:00 懒生成重复待办实例后调用它。
 - 改 newReminder / job.ts / recurrence.ts 均**必须重启 Electron**。
 
+## 资源管理器右键菜单 / 外部文件派发
+- 统一由主进程 `electron/main/module/shellMenu.ts` 实现（`registerShellMenu()` 启动时注册 + `initShellMenu()` 应用就绪后注册 IPC）。命令定义集中在 `SUB_COMMANDS`（10 条，每条带 `exts` 按扩展名限定显示），`CliAction` 覆盖 `encrypt` / `decrypt` / `secure-delete` / `open-reader` / `pdf-*`(5) / `batch-rename`。
+- 派发管线：`exe --flag "%1"` → `parseCliFiles`（`flagToAction` 映射，排除 `process.execPath` / `app.getAppPath()` 防误收集仓库目录）→ `queueCli` / `flushPending` → 渲染端 `app:cli-open` → `App.vue` 按 `action` 路由到对应 store（FileVault / EbookReader / PdfTools / FileRela）。多选文件多次触发 `second-instance` 聚合成一批。
+- 启用集合与默认打开集合持久化于 `basic_info`（`shellMenuEnabled` / `shellMenuDefaultOpen`），设置页 `fileRela/ShellMenuManager.vue` 管理。改 `shellMenu.ts` 必须重启 Electron。
+
 ## 何时读本文档
 初次接触本项目、需要判断「改哪类文件、要不要重启、走不走 IPC」时。具体模块见 `references/modules/*.md`。

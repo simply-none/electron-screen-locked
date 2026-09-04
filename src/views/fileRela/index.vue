@@ -25,6 +25,8 @@
 
       <FileRenameVue></FileRenameVue>
 
+      <ShellMenuManagerVue></ShellMenuManagerVue>
+
       <div class="file-card">
         <div class="card-header">
           <h3 class="card-title">
@@ -46,6 +48,7 @@ import LucideIcon from '@/components/LucideIcon.vue';
 import UploadVue from '@/components/upload.vue';
 import FileScanVue from './fileScan.vue';
 import FileRenameVue from './fileRename.vue';
+import ShellMenuManagerVue from './ShellMenuManager.vue';
 import FileTransferVue from './fileTransfer.vue';
 import FileDeleteVue from './fileDelete.vue';
 import DefaultApp from './defaultApp.vue';

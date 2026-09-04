@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onBeforeUnmount } from 'vue';
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import LucideIcon from '@/components/LucideIcon.vue';
 import FileDropZone from './FileDropZone.vue';
@@ -73,6 +73,11 @@ import useCacheSet from '@/store/useCacheSet';
 const store = usePdfTools();
 const cacheSet = useCacheSet();
 const file = ref<PdfFileItem | null>(null);
+// 右键「PDF 转图片」外部打开：挂载时预载传入的 PDF
+onMounted(() => {
+  const f = store.consumePendingFiles();
+  if (f.length) file.value = { path: f[0], name: f[0].replace(/^.*[\\/]/, '') };
+});
 const pageCount = ref(0);
 const format = ref<'png' | 'jpg'>('png');
 const scale = ref<number>(1.5);

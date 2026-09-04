@@ -43,13 +43,13 @@
         <h3 class="tool-title">{{ activeMeta?.title }}</h3>
         <p v-if="activeMeta?.desc" class="tool-desc">{{ activeMeta.desc }}</p>
       </div>
-      <component :is="currentComponent" />
+      <component :is="currentComponent" :key="remountKey" />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import LucideIcon from '@/components/LucideIcon.vue';
 import PdfToolCard from './components/PdfToolCard.vue';
 import MergeTool from './components/MergeTool.vue';
@@ -76,6 +76,15 @@ import { usePdfTools } from './store/usePdfTools';
 import type { PdfToolKey } from './types';
 
 const store = usePdfTools();
+
+// 右键外部打开时，force 重挂载当前工具组件以触发其 onMounted 消费 pendingFiles
+const remountKey = ref(0);
+watch(
+  () => store.pendingFiles.length,
+  (n) => {
+    if (n > 0) remountKey.value++;
+  }
+);
 
 const compMap: Record<PdfToolKey, any> = {
   merge: MergeTool,

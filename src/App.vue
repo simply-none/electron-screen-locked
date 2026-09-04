@@ -11,7 +11,11 @@ import { ElMessageBox } from 'element-plus';
 import { sysNotify, appNotify } from '@/utils/notify';
 import useWindowMode from '@/store/useWindowMode';
 import { isHabitReminderId } from '@/store/useHabit';
-import useFileVault, { type CliPendingItem } from '@/views/fileVault/store/useFileVault';
+import useFileVault from '@/views/fileVault/store/useFileVault';
+import useEbookReader from '@/store/useEbookReader';
+import { usePdfTools } from '@/views/pdfTools/store/usePdfTools';
+import { useFileRela } from '@/views/fileRela/store/useFileRela';
+import type { PdfToolKey } from '@/views/pdfTools/types';
 import FileVaultCliHandler from '@/views/fileVault/components/FileVaultCliHandler.vue';
 
 const router = useRouter()
@@ -102,9 +106,55 @@ if (!isSecondWindow) {
     appNotify(title, content, 5000, openCountdown);
   });
 
-  // 资源管理器右键菜单：接收文件参数，交给全局处理器直接弹对应对话框（不跳转保险箱页面）
-  window.ipcRenderer.on('app:cli-open', (_e, item: CliPendingItem) => {
-    useFileVault().setPendingCli(item);
+  // 资源管理器右键菜单：按动作类型分发到对应模块（阅读器 / PDF 工具箱 / 批量重命名 / 保险箱）
+  type CliAction =
+    | 'encrypt' | 'decrypt' | 'secure-delete'
+    | 'open-reader'
+    | 'pdf-compress' | 'pdf-split' | 'pdf-merge' | 'pdf-extract-attach' | 'pdf-to-image'
+    | 'batch-rename';
+  interface CliItem { action: CliAction; files: string[] }
+
+  // 右键 PDF 工具箱动作 → 工具 key 映射
+  const PDF_TOOL_MAP: Record<string, PdfToolKey> = {
+    'pdf-compress': 'compress',
+    'pdf-split': 'split',
+    'pdf-merge': 'merge',
+    'pdf-extract-attach': 'attach',
+    'pdf-to-image': 'exportImages',
+  };
+  function openPdfExternal(action: CliAction, files: string[]): void {
+    const tool = PDF_TOOL_MAP[action];
+    if (!tool || !files.length) return;
+    const pdf = usePdfTools();
+    pdf.pendingFiles = files;
+    pdf.openTool(tool);
+    router.push({ name: RouteNames.PDF_TOOLS });
+  }
+
+  window.ipcRenderer.on('app:cli-open', (_e, item: CliItem) => {
+    switch (item.action) {
+      case 'encrypt':
+      case 'decrypt':
+      case 'secure-delete':
+        // 保险箱：交给全局处理器直接弹对话框，不跳转页面
+        useFileVault().setPendingCli({ action: item.action, files: item.files });
+        break;
+      case 'open-reader':
+        useEbookReader().requestOpenExternal(item.files);
+        router.push({ name: RouteNames.EBOOK_READER });
+        break;
+      case 'pdf-compress':
+      case 'pdf-split':
+      case 'pdf-merge':
+      case 'pdf-extract-attach':
+      case 'pdf-to-image':
+        openPdfExternal(item.action, item.files);
+        break;
+      case 'batch-rename':
+        useFileRela().setPendingRenameFiles(item.files);
+        router.push({ name: RouteNames.FILE_RELA });
+        break;
+    }
   });
   // 告知主进程渲染端已就绪，可下发排队中的右键文件参数（解决首启竞态）
   window.ipcRenderer.send('app:cli-ready');

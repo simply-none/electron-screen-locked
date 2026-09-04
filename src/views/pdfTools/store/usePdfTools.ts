@@ -160,6 +160,8 @@ export const usePdfTools = defineStore('pdfTools', () => {
   const activeTool = ref<PdfToolKey | null>(null);
   /** 最近一次输出结果（用于结果区展示） */
   const recentOutputs = ref<string[]>([]);
+  /** 右键「PDF 工具箱」外部打开：预载的源文件（App.vue 写入，具体工具组件消费后清空） */
+  const pendingFiles = ref<string[]>([]);
 
   /** 打开某工具 */
   function openTool(key: PdfToolKey): void {
@@ -174,6 +176,12 @@ export const usePdfTools = defineStore('pdfTools', () => {
     recentOutputs.value.unshift(path);
     if (recentOutputs.value.length > 20) recentOutputs.value.pop();
   }
+  /** 取走外部预载文件并清空（工具组件挂载时调用，避免重复消费） */
+  function consumePendingFiles(): string[] {
+    const f = pendingFiles.value;
+    pendingFiles.value = [];
+    return f;
+  }
 
-  return { tools, activeTool, recentOutputs, openTool, backToDashboard, pushOutput };
+  return { tools, activeTool, recentOutputs, pendingFiles, openTool, backToDashboard, pushOutput, consumePendingFiles };
 });

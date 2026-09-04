@@ -28,7 +28,7 @@
         </div>
 
         <!-- 范围与排序 + 类型过滤 + 冲突策略 -->
-        <div class="range-row" v-if="folder">
+        <div class="range-row" v-if="folder || externalActive">
           <el-checkbox v-model="recursive">包含子目录</el-checkbox>
           <el-checkbox v-model="renameDirs">同时重命名文件夹（否则仅文件）</el-checkbox>
           <span class="range-label">序号排序</span>
@@ -52,10 +52,10 @@
         </div>
 
         <!-- 重命名规则面板（共享引擎组件，与文件转移复用） -->
-        <RenameRulesPanel v-model="rules" v-if="folder" />
+        <RenameRulesPanel v-model="rules" v-if="folder || externalActive" />
 
         <!-- 实时预览 -->
-        <div class="preview-block" v-if="folder">
+        <div class="preview-block" v-if="folder || externalActive">
           <div class="preview-head">
             <span>
               预览（共 {{ fileList.length }} 项，
@@ -121,7 +121,7 @@
           </div>
         </div>
 
-        <div class="copy-btn-wrap" v-if="folder">
+        <div class="copy-btn-wrap" v-if="folder || externalActive">
           <el-button
             v-if="lastRenameMap.length"
             @click="onUndo"
@@ -135,7 +135,7 @@
             type="primary"
             @click="onApply"
             class="apply-btn"
-            :disabled="!folder || hasBlockingConflict || renameTargets.length === 0"
+            :disabled="(!folder && !externalActive) || hasBlockingConflict || renameTargets.length === 0"
           >
             <el-icon><LucideIcon name="CircleCheck" /></el-icon>
             应用重命名（{{ renameTargets.length }}）
@@ -169,12 +169,28 @@ import { ElMessage } from 'element-plus';
 import RenameRulesPanel from './rename/RenameRulesPanel.vue';
 import { computeNewName, createDefaultRules, getExt, getBase, type RenameRules, type ListFolderItem } from './rename/engine';
 import type { ConflictStrategy } from './rename/types';
+import { useFileRela } from './store/useFileRela';
 
 // 目标文件夹
 const folder = ref('');
+// 右键「批量重命名」外部打开：直接以传入的文件列表构建预览（跳过文件夹选择）
+const externalActive = ref(false);
+const relaStore = useFileRela();
+
+/** 从外部路径列表构建预览项（渲染端无 node fs，仅需路径/名称/扩展名） */
+function loadExternalFiles(paths: string[]): void {
+  externalActive.value = true;
+  fileList.value = paths.map((p) => {
+    const name = p.replace(/^.*[\\/]/, '');
+    const ext = (name.match(/\.[^.]+$/) || [''])[0];
+    return { path: p, name, ext, isDir: false, mtime: 0, size: 0 } as ListFolderItem;
+  });
+}
+
 function selectFolder() {
   const res = sendSync('get-file-list', 'select-dir');
   if (res && res.length) {
+    externalActive.value = false;
     folder.value = res[0];
     refreshList();
   }
@@ -353,8 +369,8 @@ const isUndoing = ref(false);
 const lastRenameMap = ref<{ oldPath: string; newPath: string }[]>([]); // 上一次实际重命名映射，供撤销
 
 function onApply() {
-  if (!folder.value) {
-    ElMessage.warning('请先选择文件夹');
+  if (!folder.value && !externalActive.value) {
+    ElMessage.warning('请先选择文件夹或右键批量重命名');
     return;
   }
   if (hasBlockingConflict.value) {
@@ -434,7 +450,18 @@ onMounted(() => {
   window.ipcRenderer.on('rename-files', onRename);
   window.ipcRenderer.on('rename-files-progress', onRenameProgress);
   window.ipcRenderer.on('rename-files-reversed', onReversed);
+  // 右键「批量重命名」外部打开：挂载时若有待处理文件则直接构建预览
+  const ext = relaStore.consumePendingRenameFiles();
+  if (ext.length) loadExternalFiles(ext);
 });
+
+// 已在页面内时，后续到达的右键文件也直接构建预览
+watch(
+  () => relaStore.pendingRenameFiles,
+  (files) => {
+    if (files && files.length) loadExternalFiles(files);
+  }
+);
 onUnmounted(() => {
   window.ipcRenderer.removeAllListeners('rename-files');
   window.ipcRenderer.removeAllListeners('rename-files-progress');

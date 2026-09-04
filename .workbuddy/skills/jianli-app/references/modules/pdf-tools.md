@@ -67,3 +67,9 @@
 ## 与电子书阅读器的联动（附件面板）
 - `pdf:attach` 的导出**本身是正确且完整的**（已用字节级回环验证：嵌入→重新解析→解码→与原始文件 `Buffer.compare` 完全一致）。用户「看不到附件内容」的根因是**内置阅读器原本没有附件面板**，而非导出失败——排查同类反馈时先确认是「导出坏了」还是「无处可看」。
 - 阅读器侧入口：`src/views/ebookReader/index.vue` 顶部工具栏「附件」按钮（仅 `format==='pdf'`）+ `components/AttachmentsDrawer.vue` 抽屉；打开时调 `pdfApi.getAttachments(path)`，另存走 `pdf:pick-save` → `pdf:extract-attachment`（主进程直接写盘，字节不经过渲染端）。切换文件时在 `watch(currentFile.path)` 里重置附件状态。
+
+## 右键外部文件入口（PDF 工具箱）
+- 资源管理器右键 PDF 的 5 个动作（`--pdf-compress` / `--pdf-split` / `--pdf-merge` / `--pdf-extract-attach` / `--pdf-to-image`）经统一 shellMenu 管线送到 `App.vue` → `usePdfTools().pendingFiles=files` + `openTool(<tool>)` + 跳 `PDF_TOOLS`。
+- `PDF_TOOL_MAP` 映射：`pdf-compress→compress`、`pdf-split→split`、`pdf-merge→merge`、`pdf-extract-attach→attach`、`pdf-to-image→exportImages`。
+- 各子工具组件（`MergeTool` / `CompressTool` / `SplitTool` / `AttachTool` / `ExportImagesTool`）挂载时从 `store.pendingFiles` 取外部文件预载为源（MergeTool 喂 files 数组，其余设 src/file）；消费后清空 pending。
+- 详见 `modules/file-vault.md`「资源管理器右键菜单（统一）」。

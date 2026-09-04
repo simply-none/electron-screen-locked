@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import PdfSourcePicker from './PdfSourcePicker.vue';
 import PdfResultBar from './PdfResultBar.vue';
@@ -26,6 +26,12 @@ import type { PdfActionResult } from '../types';
 
 const store = usePdfTools();
 const src = ref<string | null>(null);
+
+// 右键「PDF 压缩」外部打开：挂载时预载传入的 PDF
+onMounted(() => {
+  const f = store.consumePendingFiles();
+  if (f.length) src.value = f[0];
+});
 const result = ref<PdfActionResult | null>(null);
 const loading = ref(false);
 

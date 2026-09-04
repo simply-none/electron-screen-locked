@@ -52,7 +52,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import LucideIcon from '@/components/LucideIcon.vue';
 import FileDropZone from './FileDropZone.vue';
@@ -66,6 +66,11 @@ import type { PdfFileItem, PdfActionResult, SplitConfig } from '../types';
 
 const store = usePdfTools();
 const file = ref<PdfFileItem | null>(null);
+// 右键「PDF 拆分」外部打开：挂载时预载传入的 PDF
+onMounted(() => {
+  const f = store.consumePendingFiles();
+  if (f.length) file.value = { path: f[0], name: f[0].replace(/^.*[\\/]/, '') };
+});
 const modeType = ref<'range' | 'everyN' | 'oddEven'>('range');
 /** 拆分范围（tag 式）：每个元素是一个已校验的范围文本，如「1-3」「5」 */
 const rangeTags = ref<string[]>([]);
