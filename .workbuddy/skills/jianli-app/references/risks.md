@@ -30,6 +30,9 @@
 
 25. **注册后须通知 Explorer 刷新外壳缓存（2026-09-04 新增）**：`registerShellMenu()` 末尾调用 `notifyShellRefresh()`（powershell P/Invoke `SHChangeNotify(SHCNE_ASSOCCHANGED)`）让资源管理器重新加载 shell 关联，否则新注册/取消的右键菜单项需手动重启资源管理器才显示。该调用 fire-and-forget + `try/catch` 包裹，失败不影响注册本体。
 
+26. **应用锁 2FA 门禁（2026-09-04 新增）**：解锁已升级为两步——`app-lock:unlock` 密码步通过且门禁启用时**不解锁**，返回 `{need2fa, token}` 待验证会话（120s TTL、绑定 `sender webContents.id`），渲染端 `AppLockTotpStep.vue` 凭 token 调 `app-lock:verify-2fa` 提交 TOTP/恢复码。门禁密钥独立存 `basic_info(appLock2faVault)`（AES-GCM 信封、**用应用锁密码加密**），与 2FA 保险库完全解耦（勿再往 `twoFactor.ts` 保险库里塞门禁密钥——启动锁定时保险库未打开会死锁）。新增/改动主进程文件 `appLock2fa.ts` 与 `appLock.ts` 须重启 Electron；渲染端 `useAppLock.unlock()` 返回值已从 `boolean` 改为对象 `{matched, need2fa, token, remainingAttempts, retryAfterSeconds}`。
+27. **改应用锁密码必须传 `current`**：门禁信封用应用锁密码加密，`app-lock:set-password` 在门禁启用时要求 `params.current`（先验旧密码再用新密码 `rewrap2fa` 重加密信封），缺参会报错；渲染端修改模式已自动携带。**冷却计数已移到主进程**（`appLock2fa.ts` 内存变量，密码步+动态码步共用，错 5 次冷却 30s，跨渲染端刷新有效、应用重启清零），`AppLock.vue` 旧纯前端 failCount 冷却已删除——勿再在渲染端自建计数。门禁相关 UI（向导二维码）走 `QrCodeView` 内联渲染，遵守「otpauth URI 不进 qr_history」红线。
+
 ## 维护建议
 - 每次大改动后更新对应 `references/modules/*.md` 与 `risks.md`，保持 skill 与代码同步。
 - skill 内容会随代码演进过时，把它作为「项目知识基线」，发现不符就改。

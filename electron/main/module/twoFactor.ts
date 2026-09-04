@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 import { query, upsert } from './newSql.ts';
 import { tableName } from './store.ts';
 import { readVaultFile, writeVaultFile } from './twoFactor/vault.ts';
-import { generateTotp, generateTotpWithMeta, buildOtpauthUri, randomBase32Secret } from './twoFactor/otp.ts';
+import { generateTotp, generateTotpWithMeta, buildOtpauthUri, randomBase32Secret, verifyTotpCode } from './twoFactor/otp.ts';
 import { win } from './mainWindow.ts';
 import type { TwoFactorAccount, TwoFactorAccountMeta } from './twoFactor/types.ts';
 
@@ -245,23 +245,15 @@ export function initTwoFactor() {
     return { ok: true, uri, enrolled: true };
   });
 
-  // 校验动态码：用本应用 secret 计算当前及前后各一步，命中即过（±1 步容错）
+  // 校验动态码：±1 步容错 + timingSafeEqual（复用 otp.ts 的统一校验函数）
   ipcMain.handle('app-2fa:verify', async (_e, { code }: { code: string }) => {
     if (!vault) return { ok: false, error: '未导入保险库' };
     const acc = vault.find((a) => a.key === APP_SELF_KEY);
     if (!acc) return { ok: false, error: '尚未注册本机 2FA，请先注册' };
     const clean = (code || '').replace(/\D/g, '');
     if (!clean) return { ok: false, error: '请输入动态码' };
-    const period = acc.period || 30;
-    const now = Date.now();
-    for (let offset = -1; offset <= 1; offset++) {
-      const candidate = generateTotp(acc.secret, {
-        algorithm: acc.algorithm,
-        digits: acc.digits,
-        period,
-        atTime: now + offset * period * 1000,
-      });
-      if (candidate === clean) return { ok: true };
+    if (verifyTotpCode(acc.secret, clean, { algorithm: acc.algorithm, digits: acc.digits, period: acc.period || 30 })) {
+      return { ok: true };
     }
     return { ok: false, error: '动态码不正确' };
   });

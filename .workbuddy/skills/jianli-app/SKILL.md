@@ -14,6 +14,7 @@ agent_created: true
 - 需要理解：进程边界、改主进程要不要重启、IPC 通道怎么对接、小窗怎么加、某个注册表怎么扩。
 - 要新增功能、重构功能、排查问题、排查「发了 IPC 没反应」、避免 newSql / 穿透 / 破表等历史坑。
 - **数据层操作 / 双 SQL 层合并**：建表、读写业务数据、多库选择、旧层调用迁移，见「参考文档导航」中的 `sql-db-ops.md` 与 `sql-merge-plan.md`。
+- **把功能移植到 Flutter 移动端（Android/iOS）、跨端复用 db.sqlite、类 LocalSend 局域网同步**：见下方「Flutter 移动端移植计划」与 `references/flutter-port.md`。
 
 ## 全局红线（先读，违反必踩雷）
 1. 渲染端**禁止 `import electron/*`（含类型）**；一切系统 / 磁盘 / 库操作走 IPC。
@@ -41,6 +42,7 @@ agent_created: true
 - 通用复用模式：`references/patterns.md`
 - 主题与视觉约定（token 清单 / 严禁硬编码 / 禁用未全覆盖的 --el-* / 派生色用 color-mix）：`references/theme.md`
 - 已知差异与风险：`references/risks.md`
+- Flutter 移动端移植计划（跨端 / 双端同步）：`references/flutter-port.md`
 - 逐模块文档（`references/modules/`，处理具体模块前先读对应文件）：
   - **效率 / 提醒类**：`habit` `reminder` `todo` `pomodoro` `countdown` `command-palette` `theme-conversation` `window-mode` `shortcut` `home-mode` `route-setting` `settings` `quick-note` `sticker` `app-lock` `two-factor` `file-vault`
   - **内容 / 数据类**：`clipboard` `notebook` `categorizable-notes` `ebook-reader` `accounting` `stock` `flow` `function` `color-palette` `resume`

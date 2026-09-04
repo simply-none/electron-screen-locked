@@ -31,10 +31,28 @@
         <el-switch :model-value="lockStore.onRestore" @change="(v: any) => lockStore.setOnRestore(!!v)" />
       </div>
 
+      <!-- 2FA 门禁（两步验证）：解锁需 密码 + 动态码 双重验证 -->
+      <div class="lock-row">
+        <div class="row-label">
+          <div class="row-main">两步验证（TOTP）</div>
+          <div class="row-desc">
+            开启后解锁需「密码 + 手机验证器动态码」双重验证，防止密码泄露后应用被解锁
+          </div>
+        </div>
+        <div class="row-ops">
+          <span v-if="twoFa.enabled" class="tfa-badge">恢复码剩 {{ twoFa.recoveryRemaining }} 条</span>
+          <el-switch :model-value="twoFa.enabled" @change="handleSwitch2fa" />
+        </div>
+      </div>
+
       <div class="lock-actions">
         <el-button @click="openChangeDialog">
           <LucideIcon name="KeyRound" :size="14" />
           修改密码
+        </el-button>
+        <el-button v-if="twoFa.enabled" @click="openRegenerateWizard">
+          <LucideIcon name="RefreshCw" :size="14" />
+          重新生成恢复码
         </el-button>
         <el-button type="warning" plain @click="handleLockNow">
           <LucideIcon name="LockKeyhole" :size="14" />
@@ -107,15 +125,42 @@
         <el-button type="danger" :loading="submitting" @click="submitClear">确认关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 关闭两步验证弹窗（双因子确认：密码 + 当前动态码或恢复码） -->
+    <el-dialog
+      v-model="tfaDisableVisible"
+      title="关闭两步验证"
+      width="360px"
+      :close-on-click-modal="false"
+      @closed="resetDialog"
+    >
+      <p class="clear-tip">关闭后解锁仅需密码。请输入当前密码与动态码确认：</p>
+      <el-input
+        v-model="form.current"
+        type="password"
+        show-password
+        placeholder="请输入当前密码"
+        class="tfa-gap"
+      />
+      <el-input v-model="form.code" placeholder="6 位动态码或恢复码" @keyup.enter="submitDisable2fa" />
+      <template #footer>
+        <el-button @click="tfaDisableVisible = false">取消</el-button>
+        <el-button type="danger" :loading="tfaSubmitting" @click="submitDisable2fa">确认关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 2FA 门禁向导（enroll 开启 / regenerate 重新生成恢复码） -->
+    <TwoFactorGateWizard v-model="wizardVisible" :mode="wizardMode" @completed="onWizardCompleted" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useRouter } from 'vue-router';
 import LucideIcon from '@/components/LucideIcon.vue';
 import useAppLock from '@/store/useAppLock';
+import TwoFactorGateWizard from './TwoFactorGateWizard.vue';
 
 /** 应用锁 store */
 const lockStore = useAppLock();
@@ -132,12 +177,50 @@ const clearDialogVisible = ref(false);
 /** 提交中 */
 const submitting = ref(false);
 
-/** 弹窗表单：当前密码 / 新密码 / 确认新密码 */
-const form = reactive({ current: '', next: '', confirm: '' });
+/** 弹窗表单：当前密码 / 新密码 / 确认新密码 / 动态码 */
+const form = reactive({ current: '', next: '', confirm: '', code: '' });
+
+/** 2FA 门禁配置快照（enabled + 恢复码剩余数） */
+const twoFa = reactive({ enabled: false, recoveryRemaining: 0 });
+/** 门禁向导可见性与模式 */
+const wizardVisible = ref(false);
+const wizardMode = ref<'enroll' | 'regenerate'>('enroll');
+/** 关闭两步验证弹窗可见性与提交中 */
+const tfaDisableVisible = ref(false);
+const tfaSubmitting = ref(false);
 
 onMounted(() => {
   lockStore.init();
+  load2faConfig();
 });
+
+// 应用锁关闭后门禁必然清除，联动刷新门禁配置快照
+watch(
+  () => lockStore.hasPassword,
+  (has) => {
+    if (!has) {
+      twoFa.enabled = false;
+      twoFa.recoveryRemaining = 0;
+    } else {
+      load2faConfig();
+    }
+  }
+);
+
+/**
+ * 拉取 2FA 门禁配置快照（设置页展示启用状态与恢复码剩余数）
+ *
+ * @returns {Promise<void>}
+ */
+async function load2faConfig(): Promise<void> {
+  try {
+    const config = await lockStore.get2faConfig();
+    twoFa.enabled = config.enabled;
+    twoFa.recoveryRemaining = config.recoveryRemaining;
+  } catch (err) {
+    console.error('[AppLockSetting] 拉取门禁配置失败:', err);
+  }
+}
 
 /**
  * 应用锁开关切换：开启 → 打开设置密码弹窗；关闭 → 打开验证关闭弹窗
@@ -190,7 +273,7 @@ async function submitPassword(): Promise<void> {
         return;
       }
     }
-    const ok = await lockStore.setPassword(form.next);
+    const ok = await lockStore.setPassword(form.next, isChangeMode.value ? form.current : undefined);
     if (ok) {
       ElMessage.success(isChangeMode.value ? '密码修改成功' : '应用锁已开启');
       passwordDialogVisible.value = false;
@@ -237,6 +320,70 @@ async function handleLockNow(): Promise<void> {
 }
 
 /**
+ * 2FA 门禁开关切换：未启用 → 打开注册向导；已启用 → 打开双因子关闭弹窗
+ *
+ * @returns {void}
+ */
+function handleSwitch2fa(): void {
+  if (!twoFa.enabled) {
+    wizardMode.value = 'enroll';
+    wizardVisible.value = true;
+  } else {
+    form.current = '';
+    form.code = '';
+    tfaDisableVisible.value = true;
+  }
+}
+
+/**
+ * 打开「重新生成恢复码」向导（regenerate 模式：密码 + 动态码双因子确认）
+ *
+ * @returns {void}
+ */
+function openRegenerateWizard(): void {
+  wizardMode.value = 'regenerate';
+  wizardVisible.value = true;
+}
+
+/**
+ * 关闭两步验证（双因子确认）：主进程删除门禁数据并刷新快照
+ *
+ * @returns {Promise<void>}
+ */
+async function submitDisable2fa(): Promise<void> {
+  if (tfaSubmitting.value) return;
+  if (!form.current || !form.code) {
+    ElMessage.warning('请输入当前密码与动态码');
+    return;
+  }
+  tfaSubmitting.value = true;
+  try {
+    const res = await lockStore.disable2fa(form.current, form.code.trim());
+    if (res.ok) {
+      ElMessage.success('两步验证已关闭');
+      tfaDisableVisible.value = false;
+      await load2faConfig();
+    } else {
+      ElMessage.error(res.error || '关闭失败');
+    }
+  } catch (err: any) {
+    ElMessage.error('操作失败：' + (err?.message || '未知错误'));
+  } finally {
+    tfaSubmitting.value = false;
+  }
+}
+
+/**
+ * 向导完成回调：按模式提示并刷新门禁配置快照
+ *
+ * @returns {Promise<void>}
+ */
+async function onWizardCompleted(): Promise<void> {
+  ElMessage.success(wizardMode.value === 'enroll' ? '两步验证已开启' : '恢复码已重新生成');
+  await load2faConfig();
+}
+
+/**
  * 跳转快捷键配置页（绑定「隐私模式（老板键）」/「锁定应用」快捷键）
  *
  * @returns {void}
@@ -254,6 +401,7 @@ function resetDialog(): void {
   form.current = '';
   form.next = '';
   form.confirm = '';
+  form.code = '';
 }
 </script>
 
@@ -292,6 +440,24 @@ function resetDialog(): void {
       line-height: 1.5;
     }
   }
+}
+
+.row-ops {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tfa-badge {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
+
+.tfa-gap {
+  margin-bottom: 10px;
 }
 
 .lock-actions {

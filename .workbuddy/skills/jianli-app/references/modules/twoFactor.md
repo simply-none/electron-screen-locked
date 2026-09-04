@@ -67,14 +67,14 @@
 - 与既有架构一致：菜单入口 + 路由可见开关（routeSetting 自动接管），遵循「新需求落地清单」。
 
 ## 本应用 2FA（测试小窗验证链路）
-- 用途：把 2FA 作为「渐离App 自身」的第二因素验证链路，端到端验证 TOTP 引擎 + 二维码导出 + 保险库。本期**仅做测试小窗验证**，未接入真实应用锁强制门禁（启动/锁屏不强制要求）。
+- 用途：把 2FA 作为「渐离App 自身」的第二因素验证链路，端到端验证 TOTP 引擎 + 二维码导出 + 保险库。**注意：真实的应用锁门禁（启动/锁屏强制两步验证）已于 2026-09-04 落地在 `appLock2fa.ts`，密钥独立存 `basic_info(appLock2faVault)`，与本节的保险库链路无关**（见 `app-lock.md`）；本节 `app-2fa:*` 仍保留为测试链路。
 - 本机账户：注册时以固定 key `app:self`、label `渐离App·本机` 写入保险库（随 `safeWriteBack` 回写文件），于是 2FA 页面会显示其动态码（`list`/`get-codes` 同样可见，脱敏）。
 - 新增 IPC（`app-2fa:*`）：
   - `app-2fa:enroll`：生成随机 base32 密钥（`randomBase32Secret`，默认 20 字节）→ 写入保险库 → 返回 `buildOtpauthUri` 二维码内容（手机扫码即完成真实二步注册）。
   - `app-2fa:verify(code)`：取 `app:self` secret，用 `generateTotp` 计算当前及前后各一步（±1 步容错），命中即 `{ok:true}`。
   - `app-2fa:status`：返回 `enrolled`。
   - `app-2fa:open-page`：主进程 `win.show()` + `win.webContents.send('open-match-page','twoFactor')` 让主窗口聚焦并跳 2FA 页。
-- 密钥生成：`otp.ts` 新增 `base32Encode` + `randomBase32Secret`（node:crypto）。
+- 密钥生成：`otp.ts` 新增 `base32Encode` + `randomBase32Secret`（node:crypto）；校验统一走 `verifyTotpCode(secret, code, opts)`（±1 步容错 + `timingSafeEqual` 防时序，2026-09-04 抽出，`app-2fa:verify` 与应用锁门禁共用）。
 - 小窗四件套（复用项目框架）：`src/views/appTwoFactorMiniWindow/`（index.vue 薄壳 + components/AppTwoFactorPanel.vue）；路径 `/appTwoFactorMiniWindow` 须与 `open-new-window` arg 一致；`useWindowMode` 加 `openAppTwoFactorMiniWindow`/`appTwoFactorMiniWindowConfig`（含 `mouseEvents:true`、关用 `hide-new-window`）；`windowSections.ts` 登记（`KeyRound` 图标）；`useWindowModeSetting` 的 `storeConfigMap/showSetterMap/storeVisibleMap` 补 `appTwoFactor`；`registerShortcut.ts` 加 `open_app_2fa_window` 快捷键（`DEFAULT_APP_2FA_CONFIG`）。
 - 验证流程：2FA 页「2FA 测试小窗」按钮 / 快捷键唤起 → ① 小窗「注册并生成二维码」→ ② 小窗「打开 2FA 页面看动态码」→ ③ 手输码点「验证」→ 主进程同密钥重算比对返回成功。输错码验证失败，证明是真计算而非写死。
 - 改动主进程需重启 Electron。

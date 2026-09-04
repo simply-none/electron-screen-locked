@@ -7,34 +7,45 @@
           <LucideIcon name="LockKeyhole" :size="42" />
         </div>
         <div class="lock-title">渐离App 已锁定</div>
-        <div class="lock-desc">输入密码解锁应用</div>
-        <el-input
-          ref="pwdInputRef"
-          v-model="password"
-          type="password"
-          placeholder="请输入密码"
-          size="large"
-          show-password
-          :disabled="cooldown > 0"
-          class="lock-input"
-          @keyup.enter="handleUnlock"
+        <!-- 第一步：密码输入；开启 2FA 门禁后密码通过将切到动态码步 -->
+        <template v-if="step === 'password'">
+          <div class="lock-desc">输入密码解锁应用</div>
+          <el-input
+            ref="pwdInputRef"
+            v-model="password"
+            type="password"
+            placeholder="请输入密码"
+            size="large"
+            show-password
+            :disabled="cooldown > 0"
+            class="lock-input"
+            @keyup.enter="handleUnlock"
+          />
+          <div class="lock-error">
+            <template v-if="cooldown > 0">
+              尝试次数过多，请 {{ cooldown }} 秒后再试
+            </template>
+            <template v-else-if="errorText">{{ errorText }}</template>
+          </div>
+          <el-button
+            type="primary"
+            class="lock-btn"
+            size="large"
+            :loading="unlocking"
+            :disabled="cooldown > 0 || !password"
+            @click="handleUnlock"
+          >
+            解锁
+          </el-button>
+        </template>
+        <!-- 第二步：动态码 / 恢复码校验（2FA 门禁） -->
+        <AppLockTotpStep
+          v-else
+          :token="pendingToken"
+          :cooldown="cooldown"
+          @cooldown="startCooldown"
+          @back="backToPassword"
         />
-        <div class="lock-error">
-          <template v-if="cooldown > 0">
-            密码错误次数过多，请 {{ cooldown }} 秒后再试
-          </template>
-          <template v-else-if="errorText">{{ errorText }}</template>
-        </div>
-        <el-button
-          type="primary"
-          class="lock-btn"
-          size="large"
-          :loading="unlocking"
-          :disabled="cooldown > 0 || !password"
-          @click="handleUnlock"
-        >
-          解锁
-        </el-button>
       </div>
     </div>
   </Transition>
@@ -44,10 +55,15 @@
 import { nextTick, onMounted, ref, watch } from 'vue';
 import LucideIcon from '@/components/LucideIcon.vue';
 import useAppLock from '@/store/useAppLock';
+import AppLockTotpStep from './components/AppLockTotpStep.vue';
 
 /** 应用锁 store（锁定态由主进程广播驱动） */
 const lockStore = useAppLock();
 
+/** 当前解锁步骤：password 密码步 / totp 动态码步（2FA 门禁） */
+const step = ref<'password' | 'totp'>('password');
+/** 待 2FA 会话 token（密码步通过后由主进程返回） */
+const pendingToken = ref('');
 /** 密码输入 */
 const password = ref('');
 /** 输入框引用（锁定时自动聚焦） */
@@ -56,9 +72,7 @@ const pwdInputRef = ref();
 const unlocking = ref(false);
 /** 错误提示文本 */
 const errorText = ref('');
-/** 连续错误计数（达 5 次触发冷却） */
-const failCount = ref(0);
-/** 冷却倒计时（秒），0 表示无冷却 */
+/** 冷却倒计时（秒），0 表示无冷却（数值来自主进程返回的 retryAfterSeconds） */
 const cooldown = ref(0);
 /** 冷却定时器句柄 */
 let cooldownTimer: ReturnType<typeof setInterval> | null = null;
@@ -67,21 +81,31 @@ onMounted(() => {
   lockStore.init();
 });
 
-// 锁定态变化：清空输入并自动聚焦（防遗留上一次的密码在输入框中）
+// 锁定态变化：复位到密码步并清空输入（防遗留上一次的密码/会话 token）
 watch(
   () => lockStore.locked,
   async (locked) => {
     if (locked) {
       password.value = '';
       errorText.value = '';
+      pendingToken.value = '';
+      step.value = 'password';
       await nextTick();
       pwdInputRef.value?.focus?.();
+    } else {
+      // 解锁成功：清空全部临时状态
+      pendingToken.value = '';
+      step.value = 'password';
+      cooldown.value = 0;
+      if (cooldownTimer) clearInterval(cooldownTimer);
+      cooldownTimer = null;
     }
   }
 );
 
 /**
- * 解锁：主进程校验通过即广播解锁；失败累计错误并触发冷却惩罚
+ * 第一步解锁：主进程校验密码；开启 2FA 门禁时返回待验证会话，切到动态码步。
+ * 失败计数与冷却在主进程维护，此处仅按返回值提示剩余次数 / 启动冷却倒计时。
  *
  * @returns {Promise<void>}
  */
@@ -90,30 +114,48 @@ async function handleUnlock(): Promise<void> {
   unlocking.value = true;
   errorText.value = '';
   try {
-    const matched = await lockStore.unlock(password.value);
-    if (matched) {
-      // 成功：清空输入与错误计数
+    const res = await lockStore.unlock(password.value);
+    if (res.matched && res.need2fa) {
+      // 密码正确且已开启门禁：进入第二步（动态码 / 恢复码）
+      pendingToken.value = res.token || '';
+      step.value = 'totp';
       password.value = '';
-      failCount.value = 0;
+    } else if (res.matched) {
+      // 直接解锁成功（未开启门禁）：遮罩随广播淡出
+      password.value = '';
       errorText.value = '';
+    } else if (res.retryAfterSeconds && res.retryAfterSeconds > 0) {
+      startCooldown(res.retryAfterSeconds);
     } else {
-      failCount.value += 1;
-      if (failCount.value >= 5) {
-        startCooldown(30);
-      } else {
-        errorText.value = `密码错误（还剩 ${5 - failCount.value} 次尝试机会）`;
-      }
+      errorText.value =
+        typeof res.remainingAttempts === 'number'
+          ? `密码错误（还剩 ${res.remainingAttempts} 次尝试机会）`
+          : '密码错误';
     }
   } catch (err: any) {
     errorText.value = '解锁失败：' + (err?.message || '未知错误');
   } finally {
     unlocking.value = false;
-    if (lockStore.locked) pwdInputRef.value?.focus?.();
+    if (lockStore.locked && step.value === 'password') pwdInputRef.value?.focus?.();
   }
 }
 
 /**
- * 启动冷却倒计时（连续输错 5 次后锁定输入 30 秒，防暴力尝试）
+ * 返回密码输入步（动态码步点击「返回重新输入密码」）：
+ * 旧会话 token 作废，重新提交密码会创建新会话
+ *
+ * @returns {Promise<void>}
+ */
+async function backToPassword(): Promise<void> {
+  pendingToken.value = '';
+  step.value = 'password';
+  errorText.value = '';
+  await nextTick();
+  pwdInputRef.value?.focus?.();
+}
+
+/**
+ * 启动冷却倒计时（主进程返回的 retryAfterSeconds 驱动，冷却期内两步输入均禁用）
  *
  * @param {number} seconds - 冷却秒数
  * @returns {void}
@@ -127,7 +169,6 @@ function startCooldown(seconds: number): void {
     if (cooldown.value <= 0) {
       if (cooldownTimer) clearInterval(cooldownTimer);
       cooldownTimer = null;
-      failCount.value = 0; // 冷却结束重置错误计数
     }
   }, 1000);
 }

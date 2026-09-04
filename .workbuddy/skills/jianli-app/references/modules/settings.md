@@ -5,6 +5,7 @@
 
 ## 关键文件
 - 页面：`src/views/setting/index.vue`（番茄钟设置区块等）、`cacheSet.vue`（缓存清理）
+- 安全与隐私区块：`src/views/setting/components/AppLockSetting.vue`（应用锁 + 2FA 门禁行 + 关闭双因子弹窗）、`TwoFactorGateWizard.vue`（门禁注册/恢复码向导，见 `app-lock.md`）
 - 核心 store：`src/store/useGlobalSetting.ts`（大量 `setStore` 字段：`curStatus`、`isStartup`、`sidebarVisible`、`appBgColor`、`globalFont`、`homeMode` 等，见 `:86-289`）
 - 主题：`src/store/useTheme.ts`（`STORE_KEY` 经 `get/setStore`）
 

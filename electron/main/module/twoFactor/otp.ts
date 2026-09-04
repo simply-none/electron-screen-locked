@@ -119,6 +119,32 @@ export function generateTotpWithMeta(secretBase32: string, opts: TotpOptions = {
 }
 
 /**
+ * 校验 TOTP 动态码：允许 ±1 个周期的时钟偏差容错，
+ * 用 timingSafeEqual 做常量时间比对，防时序侧信道。
+ * 供 twoFactor.ts（app-2fa:verify）与 appLock2fa.ts（应用锁门禁）复用。
+ *
+ * @param {string} secretBase32 - base32 密钥
+ * @param {string} code - 用户输入的动态码（内部清洗非数字字符）
+ * @param {TotpOptions} opts - 与生成时一致的 algorithm/digits/period 参数
+ * @returns {boolean} 是否校验通过
+ */
+export function verifyTotpCode(secretBase32: string, code: string, opts: TotpOptions = {}): boolean {
+  const clean = (code || '').replace(/\D/g, '');
+  if (!clean) return false;
+  const period = opts.period || 30;
+  const atTime = opts.atTime ?? Date.now();
+  const inputBuf = Buffer.from(clean, 'utf8');
+  for (let offset = -1; offset <= 1; offset++) {
+    const candidate = generateTotp(secretBase32, { ...opts, period, atTime: atTime + offset * period * 1000 });
+    const candBuf = Buffer.from(candidate, 'utf8');
+    if (candBuf.length === inputBuf.length && crypto.timingSafeEqual(candBuf, inputBuf)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * 把账户拼成 otpauth:// URI（用于导出二维码，供其他验证器扫码）。
  * 注意：URI 内含密钥明文，仅在用户主动“生成二维码”时构造，绝不落库。
  */

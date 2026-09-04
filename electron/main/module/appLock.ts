@@ -11,6 +11,9 @@
  *    - 最小化恢复时锁定：主窗口 restore/show 回前台时自动锁定
  * 3. 隐私模式（老板键）：快捷键一键隐藏全部窗口，再按恢复；
  *    锁定态下恢复时不还原小窗（保持锁定隐私）。
+ * 4. 2FA 门禁（appLock2fa.ts，两步验证）：开启后 unlock 密码步通过并不直接解锁，
+ *    而是创建「待 2FA 会话」返回 token，渲染端再凭 token 提交 TOTP 动态码（或一次性恢复码），
+ *    全部锁定路径（手动/快捷键/启动/恢复/命令面板）统一强制。防暴力冷却计数在主进程。
  *
  * 安全设计（与 2FA / 密码管理统一）：
  * - 复用 vault/crypto.ts 的同一套 AES-256-GCM + PBKDF2 原语，密钥由用户口令派生；
@@ -26,6 +29,16 @@ import { query, upsert, del } from "./newSql.ts";
 import { tableName, store } from "./store.ts";
 import { win } from "./mainWindow.ts";
 import { encryptVault, decryptVault, type VaultEnvelope } from "./vault/crypto.ts";
+import {
+  initAppLock2fa,
+  is2faEnabled,
+  createPending2fa,
+  registerLockFailure,
+  resetLockFailures,
+  isCoolingDown,
+  rewrap2fa,
+  purge2fa,
+} from "./appLock2fa.ts";
 
 /** 保险库在 basic_info 中的存储键 */
 const PASSWORD_KEY = "appLockVault";
@@ -63,11 +76,12 @@ async function readVaultEnvelope(): Promise<VaultEnvelope | null> {
 
 /**
  * 校验密码（主进程解密比对，明文不出现在任何存储中）
+ * 导出供 appLock2fa.ts 注入复用（门禁注册 / 关闭前的密码校验）。
  *
  * @param {string} text - 用户输入的明文密码
  * @returns {Promise<boolean>} 是否匹配；未设置密码返回 false
  */
-async function verifyPassword(text: string): Promise<boolean> {
+export async function verifyPassword(text: string): Promise<boolean> {
   const env = await readVaultEnvelope();
   if (!env) return false;
   try {
@@ -125,10 +139,11 @@ function lockAppNow(): void {
  * 解锁应用
  *
  * 流程：清除锁定态 → 广播 → 恢复锁定时隐藏的小窗（按原窗口对象 show，无需重建）。
+ * 导出供 appLock2fa.ts 注入复用（门禁动态码校验通过后执行解锁）。
  *
  * @returns {void}
  */
-function unlockAppNow(): void {
+export function unlockAppNow(): void {
   if (!isLocked) return;
   isLocked = false;
   try {
@@ -251,8 +266,10 @@ async function migrateLegacySecrets(): Promise<void> {
  * 初始化应用锁模块：注册 IPC 通道 + 挂主窗口事件 + 启动锁定检查
  *
  * 注册的通道：
- * - app-lock:set-password 设置密码 / app-lock:verify 校验 / app-lock:clear-password 清除
- * - app-lock:unlock 解锁（校验通过即解锁）/ app-lock:lock 立即锁定 / app-lock:get-state 状态快照
+ * - app-lock:set-password 设置/修改密码 / app-lock:verify 校验 / app-lock:clear-password 清除
+ * - app-lock:unlock 解锁（密码步；开启 2FA 门禁时返回 need2fa + 待验证 token）
+ * - app-lock:verify-2fa 门禁动态码校验 / app-lock:2fa-* 门禁管理（见 appLock2fa.ts）
+ * - app-lock:lock 立即锁定 / app-lock:get-state 状态快照
  * - app-lock:config-changed 配置变更通知（重读开关）
  * - app-lock:state-changed 主→渲染广播锁定态
  *
@@ -265,16 +282,28 @@ export function initAppLock() {
   migrateLegacySecrets().catch((err) => console.error("[appLock] 迁移清理异常:", err));
 
   // 设置密码（首次开启或修改）：主进程内加密落库，明文不经过渲染端存储
-  ipcMain.handle("app-lock:set-password", async (_e, params: { text: string }) => {
+  // 修改密码（传 current）时先校验旧密码；若已开启 2FA 门禁，须用新密码重加密门禁信封
+  ipcMain.handle("app-lock:set-password", async (_e, params: { text: string; current?: string }) => {
     try {
       const { text } = params || ({} as any);
       if (!text || typeof text !== "string") return { ok: false, error: "密码不能为空" };
+      // 已有门禁数据时改密：必须携带当前密码（用于解开旧信封重加密），且旧密码须正确
+      const gateEnabled = await is2faEnabled();
+      if (gateEnabled) {
+        const current = params?.current || "";
+        if (!current) return { ok: false, error: "已开启两步验证，请输入当前密码以迁移门禁数据" };
+        if (!(await verifyPassword(current))) return { ok: false, error: "当前密码错误" };
+      }
       const env = encryptVault<string>([SENTINEL], text);
       await upsert({
         tableName,
         data: { key: PASSWORD_KEY, value: JSON.stringify(env) },
         config: { primaryKey: "key" },
       });
+      // 用新密码重加密门禁信封（无门禁数据时为空操作）
+      if (gateEnabled && !(await rewrap2fa(params?.current || "", text))) {
+        return { ok: false, error: "两步验证数据迁移失败，请重试或用恢复码解锁后重设" };
+      }
       return { ok: true };
     } catch (err: any) {
       console.error("[appLock] 设置密码失败:", err);
@@ -288,12 +317,14 @@ export function initAppLock() {
     return { matched };
   });
 
-  // 清除密码（需先校验当前密码）：删除存储行并解除锁定
+  // 清除密码（需先校验当前密码）：删除存储行并解除锁定；2FA 门禁数据一并清除
   ipcMain.handle("app-lock:clear-password", async (_e, params: { text: string }) => {
     const matched = await verifyPassword(params?.text || "");
     if (!matched) return { ok: false, matched, error: "密码错误" };
     try {
       await del({ tableName, condition: { key: PASSWORD_KEY } });
+      // 应用锁整体关闭：门禁密钥与恢复码随之作废
+      await purge2fa();
       unlockAppNow();
       return { ok: true, matched };
     } catch (err: any) {
@@ -302,11 +333,26 @@ export function initAppLock() {
     }
   });
 
-  // 解锁（校验通过即解锁并广播）
-  ipcMain.handle("app-lock:unlock", async (_e, params: { text: string }) => {
+  // 解锁（两步：密码通过 → 若开启 2FA 门禁则返回待验证会话，由渲染端提交动态码；
+  // 失败统一计入主进程冷却计数，连续错 5 次冷却 30 秒）
+  ipcMain.handle("app-lock:unlock", async (e, params: { text: string }) => {
+    // 冷却期内直接拒绝（密码步与动态码步共用同一冷却）
+    const cooling = isCoolingDown();
+    if (cooling > 0) return { matched: false, retryAfterSeconds: cooling };
     const matched = await verifyPassword(params?.text || "");
-    if (matched) unlockAppNow();
-    return { matched };
+    if (!matched) {
+      const failure = registerLockFailure();
+      if (failure.cooldown) return { matched: false, retryAfterSeconds: failure.retryAfterSeconds };
+      return { matched: false, remainingAttempts: failure.remainingAttempts };
+    }
+    resetLockFailures();
+    // 已开启门禁：不解锁，进入第二步（TOTP / 恢复码）
+    if (await is2faEnabled()) {
+      const token = createPending2fa(params?.text || "", e.sender.id);
+      return { matched: true, need2fa: true, token };
+    }
+    unlockAppNow();
+    return { matched: true };
   });
 
   // 立即锁定（设置页测试按钮 / 命令面板触发）
@@ -315,7 +361,7 @@ export function initAppLock() {
     return { ok: true };
   });
 
-  // 状态快照（渲染端初始化用：锁定态 + 是否已设密码 + 两个开关）
+  // 状态快照（渲染端初始化用：锁定态 + 是否已设密码 + 两个开关 + 2FA 门禁是否启用）
   ipcMain.handle("app-lock:get-state", async () => {
     const env = await readVaultEnvelope();
     return {
@@ -323,6 +369,7 @@ export function initAppLock() {
       hasPassword: !!env,
       onStartup: await readBoolConfig(LOCK_ON_STARTUP_KEY),
       onRestore: await readBoolConfig(LOCK_ON_RESTORE_KEY),
+      twoFactorEnabled: await is2faEnabled(),
     };
   });
 
@@ -356,6 +403,9 @@ export function initAppLock() {
       console.error("[appLock] 启动锁定检查异常:", err);
     }
   }, 4000);
+
+  // 初始化 2FA 门禁子系统（app-lock:2fa-* 通道族），注入密码校验与解锁函数避免循环依赖
+  initAppLock2fa({ verifyPassword, unlockAppNow });
 }
 
 export { lockAppNow, togglePrivacyHide };
