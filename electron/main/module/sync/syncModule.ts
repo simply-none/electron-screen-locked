@@ -9,7 +9,7 @@
  *   数据面：  HTTP 端口 47124；GET /ping → 设备信息；POST /sync → {table, rows}
  *
  * 设计约定：
- * - 仅同步 TEXT 主键表（key），INSERT/REPLACE 天然幂等；INTEGER 主键表列 P3。
+ * - 同步表主键按表适配（tablePk）：TEXT 主键表用 key；主题对话三表为 INTEGER 自增 id（2026-09-05 加入），ON CONFLICT(id) 同样幂等。
  * - 白名单表，防任意表写入。
  * - 安全 TODO(P3)：当前明文 JSON，仅限受信局域网；后续加会话密钥。
  * - 本模块不改任何现有模块；新增初始化入口 initSync()（在 index.ts createWindow 末尾调用）。
@@ -43,7 +43,7 @@ export interface SyncTableResult {
   error?: string;
 }
 
-/** 可同步表白名单（TEXT 主键） */
+/** 可同步表白名单（主键按 TABLE_PKS 适配；主题对话三表为 INTEGER 自增 id，2026-09-05 加入） */
 const SYNCABLE_TABLES = new Set([
   "habit_def",
   "habit_checkin",
@@ -54,7 +54,16 @@ const SYNCABLE_TABLES = new Set([
   "countdown",
   "qr_history",
   "qr_template",
+  // 主题对话三表（INTEGER 自增 id 主键，见 tablePk）
+  "conversation_theme",
+  "conversation",
+  "conversation_tag",
 ]);
+
+/** 按表主键映射：缺省 key（旧 SQL 层遗留）；主题对话三表为自增 id */
+function tablePk(table: string): string {
+  return table.startsWith("conversation") ? "id" : "key";
+}
 
 /** 本机设备 id（主机名稳定哈希，与移动端一致） */
 function deviceId(): string {
@@ -142,7 +151,7 @@ function startDataServer(): http.Server {
             await upsert({
               tableName: table,
               data: row,
-              config: { primaryKey: "key" },
+              config: { primaryKey: tablePk(table) },
             });
             written++;
           }

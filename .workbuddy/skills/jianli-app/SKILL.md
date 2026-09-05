@@ -56,4 +56,5 @@ agent_created: true
 
 ## 维护说明
 - 本 skill 是「项目知识基线」，随代码演进而更新。每次大改动后同步 `risks.md` 与对应模块文档。
+- 2026-09-05：**局域网同步白名单扩容（移动端主题对话对齐）**——`syncModule.ts` 与 `src/store/useSync.ts` 加入主题对话三表 `conversation_theme` / `conversation` / `conversation_tag`（INTEGER 自增 id 主键）；新增 `tablePk()` 按表适配主键（conversation* → `id`，其余 → `key`），upsert 走 `ON CONFLICT(pk) DO UPDATE`。详见 `references/modules/sync.md` 白名单小节；**改完需重启 Electron**。
 - 新增模块时：在 `references/modules/` 加一份文档，并在上方「逐模块文档」导航里补一行。

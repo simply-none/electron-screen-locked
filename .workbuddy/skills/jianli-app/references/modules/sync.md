@@ -10,7 +10,7 @@ PC 与移动端（Flutter App）在同一局域网内互相发现并同步业务
   - `GET /ping` → 设备信息
   - `GET /export?table=x` → `{ok, rows}`（行内含桌面端遗留列，移动端按自身实际列过滤写入）
   - `POST /sync` → `{table, rows}` → 对端幂等 upsert
-- **白名单**（两端一致，TEXT 主键）：habit_def / habit_checkin / todo_list / todo_tags / note_book / basic_info / countdown / qr_history / qr_template
+- **白名单**（两端一致）：habit_def / habit_checkin / todo_list / todo_tags / note_book / basic_info / countdown / qr_history / qr_template（TEXT 主键 key）+ conversation_theme / conversation / conversation_tag（**INTEGER 自增 id 主键**，2026-09-05 加入）。主键按 `syncModule.ts` 的 `tablePk()` 按表适配：upsert 走 `ON CONFLICT(pk) DO UPDATE`（newSql），移动端 `INSERT OR REPLACE`。**新增 INTEGER 主键表时：三处同改（主进程 SYNCABLE_TABLES + tablePk、渲染端 SYNC_TABLES、移动端 kSyncableTables）并重启 Electron。**
 
 ## 关键文件
 - 主进程：`electron/main/module/sync/syncModule.ts`（发现应答 + 数据服务 + 主动扫描/推送/拉取 + IPC；**改完必须重启 Electron**）

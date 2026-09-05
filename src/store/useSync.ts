@@ -21,6 +21,10 @@ export const SYNC_TABLES = [
   "countdown",
   "qr_history",
   "qr_template",
+  // 主题对话三表（INTEGER 自增 id 主键，主进程按 tablePk 适配）
+  "conversation_theme",
+  "conversation",
+  "conversation_tag",
 ] as const;
 
 export const useSync = defineStore("sync", () => {
