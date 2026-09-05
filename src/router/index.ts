@@ -9,6 +9,7 @@ declare module "vue-router" {
 export const RouteNames = {
   SETTING: "setting",
   NEW_TIPS: "newTips",
+  SYNC: "sync",
   HABIT: "habit",
   COUNTDOWN: "countdown",
   COUNTDOWN_MINI: "countdownMiniWindow",
@@ -107,6 +108,14 @@ export const layoutRouters: RouteRecordRaw[] = [
     component: () => import("@/views/newTips/index.vue"),
     meta: {
       title: "提醒",
+    },
+  },
+  {
+    path: "/sync",
+    name: RouteNames.SYNC,
+    component: () => import("@/views/sync/index.vue"),
+    meta: {
+      title: "局域网同步",
     },
   },
   {

@@ -145,6 +145,7 @@ export const iconMap: Record<string, string> = {
   themeConversation: 'MessagesSquare',
   registerShortcut: 'Lightbulb',
   safetyProtection: 'Lock',
+  sync: 'RefreshCw',
   netRequest: 'MapPin',
   highPerfSql: 'Database',
   flow: 'Share2',

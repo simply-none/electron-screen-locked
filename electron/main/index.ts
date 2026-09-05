@@ -43,6 +43,7 @@ import { initQrCode } from "./module/qrcode.ts";
 import { initTwoFactor } from "./module/twoFactor.ts";
 import { initPasswordVault } from "./module/passwordVault.ts";
 import { initFileVault } from "./module/fileVault.ts";
+import { initSync } from "./module/sync/syncModule.ts";
 import {
   registerShellMenu,
   initShellMenu,
@@ -169,6 +170,8 @@ async function createWindow() {
   initPasswordVault();
   // 私密文件保险箱模块（复用 2FA / 密码保险库的 AES-256-GCM + PBKDF2 安全架构）
   initFileVault();
+  // 局域网同步模块（LocalSend-like：UDP 发现 + HTTP 数据面，与 Flutter 移动端同协议）
+  initSync();
   // 资源管理器右键菜单（Windows 专属）：注册「通过渐离App打开」菜单（按扩展名限定 + 打开方式 ProgID）
   registerShellMenu();
   // 右键菜单管理 IPC（启用集合 / 默认打开 / 重新注册）
