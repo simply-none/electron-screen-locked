@@ -1,110 +1,93 @@
-# 文件互传（fileTransfer）双端方案与任务清单
+# 文件互传（fileTransfer）双端方案 · 决策记录
 
-> 状态：**方案草案，待用户确认后动码**（2026-09-06 依据双端代码勘察产出）。
-> 实施完成后：本文件精简为协议与决策记录；桌面端细节转正到 `references/modules/file-transfer.md`，移动端细节记录在移动端技能 `jianli-mobile-app/references/file-transfer-plan.md`。
+> 状态：**已实施完成（2026-09-06）**。本文件由方案草案转为决策记录，保留协议设计与实施决策；实现细节见 `references/modules/file-transfer.md`（桌面端）与移动端技能 `references/file-transfer-plan.md`。
+> 移动端姊妹文档：`C:\cod\jianli\jianli-mobile-app\.workbuddy\skills\jianli-mobile-app\references\file-transfer-plan.md`（同协议、同历史表）。
+> **2026-09-06 追加完成后续（两批）**：① `transfer:cancel` 取消批次 + `scanPeers()` 热点定向广播（可选项 A）；② 健壮性 + 体验补齐（1–8 + 12）：sha256 完整性校验（双端）、历史 `error` 失败原因列（双端）、进度节流 + 取消/中断残留 `.part` 清理 + `incoming` 回收、发送端 `peer_name` 经 offer `me` 回填、桌面端历史「打开文件 / 打开所在文件夹」、批次总进度/速率/ETA、移动端历史「打开 / 分享」（`open_filex`+`share_plus`）。
+> **P2 断点续传（已完成，2026-09-06 二批）**：offer 响应回 `accepted:[{fid,resumeFrom}]`、data 带 `?from=N` 追加写 + hash 播种；加密批次整文件重发（CTR keystream 不可任意字节对齐）。**P3 会话加密（已完成，2026-09-06 二批）**：AES-256-CTR，offer 协商 `enc` 字段、data 密文流，默认关、向后兼容。其余增强（#9 重名覆盖 / #10 文件夹拖拽 / #11 最近设备 / #15 接收询问 / #16 磁盘预估 / #17 并发守卫 / #20 历史分页+自动清理）同批落地，详见 §二之一。
 
-## 一、需求
+## 一、需求（已落地）
+- 双端各一个【文件互传】页面：PC（Electron）⇆ 手机（Flutter）局域网互发文件。
+- **批量**互传：一次选多文件、逐文件串行、逐文件进度与成败结果。
+- **双端对称**：都能发、都能收，复用既有类 LocalSend 设施（UDP 47123 发现 + HTTP 47124 数据面），**不新开端口、不新写发现协议**。
 
-- 双端各新增一个页面【文件互传】：桌面端（Electron）⇆ 移动端（Flutter）局域网互发文件。
-- 支持**批量**互传：一次选多个文件、逐文件串行传输、逐文件进度与成功/失败结果。
-- 双端**对称**：都能发送、都能接收，复用现有类 LocalSend 设施（UDP 47123 发现 + HTTP 47124 数据面）。
-
-## 二、勘察结论（方案依据，2026-09-06 实测）
-
-### 桌面端（本工程）
-- 数据面 HTTP server：`electron/main/module/sync/syncModule.ts` L110-172，原生 `http.createServer` + 串行 if 路由（GET /ping、GET /export?table=、POST /sync、404 兜底），端口 `47124`；**加 /file/* 端点只需插一段 if 分支**，本方案改为导出可插拔注册函数（见任务 4）。
-- UDP 发现 47123（L87-107）：广播包 `JIANLI_SYNC_DISCOVER_V1`，应答 `JIANLI_SYNC_INFO_V1|{json:{name,id,platform}}`；`scanPeers()` L179-207 只发 255.255.255.255 受限广播（**热点场景 PC 主动扫不到手机**，移动端已修）。
-- 主进程模块注册：`electron/main/index.ts` L46 import + L174 `initSync()`（createWindow 末尾）；新 transfer 模块同样两处。
-- preload 只透传 `handlePromise/send/sendSync`（`electron/preload/index.ts` L1-10、L573-579），**未透传 `on`** → 主进程推进度/接收事件需补 `on` 透传（限 `file-transfer:` 前缀）。
-- 文件选择对话框先例：`file-vault:pick-import`（`electron/main/module/fileVault.ts` L284，`dialog.showOpenDialogSync` + `multiSelections`）。
-- 导出统一规范：`src/utils/exportToFile.ts`（exportTextToCache/exportBufferToCache，直写 `fileCachePath`，回退链 `入参 dir → store.get('fileCachePath') → app.getPath('documents')`）+ `src/utils/fileNotify.ts`（蓝色可点击路径，点击走 `open-file-in-assets-manager`）。
-- 建表正规姿势：`ensureTableExists(tableName, columns, 'key', {primaryKeyType:'TEXT'})`（`electron/main/module/qrcode.ts` L121-137 先例）。
-- sha256 用 `node:crypto`（无第三方包，fileVault.ts/ebook.ts 先例）。
-- 页面范式：`src/views/sync/` = index.vue 薄壳 + components/ + api/syncApi.ts + types.ts + `src/store/useSync.ts`（Pinia）。
-- 菜单四件套：`src/router/index.ts`（RouteNames + layoutRouters）、`src/utils/index.ts` iconMap（Lucide 图标名）、`src/layout/index.vue` groupDefs（L133-139，sync 在「系统与资源」组 L135）、`src/views/routeSetting/index.vue` groupDefs（L69-75）。
-- ⚠️ `.workbuddy\skills\jianli-app\references\` 存在同套文档副本，实施时需一并同步。
-
-### 移动端（姊妹工程 jianli-mobile-app）
-- 数据面：`lib/core/sync/sync_service.dart` L42-98，裸 `dart:io HttpServer` 绑 47124，if-else 分派（/ping、/export、/sync、404），**server 在同步页 `_init()` 才启动**（幂等守卫，`_server != null` 直接 return）。
-- 发现：`lib/core/sync/sync_discovery.dart` —— `SyncDiscovery.scan()` 返回 `Map<ip, PeerDevice>`；`PeerDevice{ip,name,id,platform}`；`broadcastCandidates()` 已修热点定向广播。
-- HTTP 客户端统一 dart:io `HttpClient`（sync_service L153-179 POST JSON 先例），**无 http/dio 依赖**；发二进制流可用 `req.addStream(file.openRead())`。
-- file_picker 12.2.0（静态 API `FilePicker.pickFiles(...)`，先例都直接用 `f.path` 当真实路径）；`crypto` ^3.0.7、`path_provider`、`uuid` 已有；**share_plus / open_filex 没有**。
-- drift：`app_database.dart` `schemaVersion = 1`，**onUpgrade 尚无先例**；表注册在 `@DriftDatabase(tables:[...])`；列名必须 `.named('snake_name')` 锁定。
-- Android：`android/app/src/main/AndroidManifest.xml` **无任何 uses-permission**（INTERNET 只在 debug/profile manifest）；debug 模板自带 cleartext 放行，**release 包需显式配 INTERNET 权限 + usesCleartextTraffic**。
-- 路由 `/sync` 注册先例：`lib/app/router/app_router.dart` L180-183（`fadeSlidePage` 包装）；工具组入口 `lib/features/hubs/hub_pages.dart` L67-73，`_Entry = (icon, title, subtitle, route, accentIndex)`，工具组已用 0/1/2/3/5。
-
-## 三、协议设计 v1（文件互传，复用 47124，不新开端口与发现协议）
+## 二、协议 v1（文件互传，复用 47124，已落地）
 
 两端对称实现「发送客户端 + 接收服务端」。批量 = 一次 offer + 逐文件串行 data/end。
 
 | 端点 | 方向 | 说明 |
 |---|---|---|
-| `POST /file/offer` | 发→收 | JSON `{tid, from:{name,id,platform}, files:[{fid,name,size,mime?}]}`；接收端回 `{ok:true, accepted:[fid...]}`；「自动接收」关闭时回 `{ok:false, reason:'rejected'}` |
-| `POST /file/data?tid=&fid=` | 发→收 | **原始文件字节流**（带 Content-Length，全程流式、不落内存不 base64）；接收端先写 `<fid>.part`，回 `{ok:true, received:累计字节}` |
-| `POST /file/end?tid=&fid=` | 发→收 | 单文件收尾：`.part` 改名为去重终名、写 file_transfer 历史、发接收通知，回 `{ok:true}` |
+| `POST /file/offer` | 发→收 | JSON `{tid, from:{name,id,platform}, files:[{fid,name,size,mime?}]}`；收端回 `{ok:true, accepted:[fid...]}`；「自动接收」关闭时回 `{ok:false, reason:'rejected'}` |
+| `POST /file/data?tid=&fid=` | 发→收 | **原始文件字节流**（带 Content-Length，全程流式、不落内存不 base64）；收端先写 `<fid>.part`，回 `{ok:true, received:累计字节}` |
+| `POST /file/end?tid=&fid=` | 发→收 | 单文件收尾：`.part` 改名去重终名、写 file_transfer 历史、推接收事件，回 `{ok:true, error?}`；**请求体 JSON 携带本文件 sha256 `{hash}`，接收端比对** |
 
-- `tid` = uuid 批次号；`fid` = 批次内序号（"1"、"2"…）。
-- 文件名安全：接收端仅取 basename、过滤非法字符、重名追加 ` (n)`；**只允许落到专用接收目录**。
-- 进度：发送端在写出流上按字节回调（节流 ~100ms）；接收端在请求 data 事件上累计；各自推送到本端 UI。
-- 安全边界：与现有同步一致（明文传输、仅限受信局域网）；v1 默认自动接收，页面可关（关闭后 offer 被拒）。
-- 校验：可选 sha256（两端 crypto 都现成）——v1 先做 size 比对，sha256 列 P2。
+- `tid`=uuid 批次号；`fid`=批次内序号（"1"、"2"…）。
+- 文件名安全：收端仅取 basename、过滤非法字符、重名追加 ` (n)`；只允许落专用接收目录。
+- 进度：发送端按字节回调（Transform 计数流）；接收端在请求 data 事件累计；各自推本端 UI。
+- 安全边界：与同步一致（明文、仅限受信局域网）；v1 默认自动接收，页面可关（关后 offer 被拒）。
+- 校验：**size 比对 + sha256 完整性校验双保险（2026-09-06 已实施）**。发送端 data 阶段流式算 sha256 随 `/file/end` 的 `{hash}` 带出；接收端 `/file/data` 边收边算 sha256 暂存，`/file/end` 比对，不符则删坏文件、历史记 `failed`(error=`hash mismatch`) 且不弹通知。
 
 **双端同构历史表 `file_transfer`（TEXT key 主键，设备本地记录，不入同步白名单）**：
-`key`(uuid,每文件一条) / `tid` / `fid` / `direction`('send'|'receive') / `peer_name` / `peer_ip` / `file_name` / `size`(INTEGER) / `mime`(可空) / `path`(本地路径) / `status`('done'|'failed'|'canceled') / `created_at`(ISO 文本)
+`key`(uuid,每文件一条) / `tid` / `fid` / `direction`('send'|'receive') / `peer_name` / `peer_ip` / `file_name` / `size`(INTEGER) / `mime`(可空) / `path`(本地路径) / `status`('done'|'failed'|'canceled') / `error`(失败原因，可空) / `created_at`(ISO 文本)
 
-## 四、桌面端任务清单
+## 二之一、协议增强（2026-09-06 二批，向后兼容）
 
-**新建**
-- [ ] T1 `electron/main/module/transfer/transferModule.ts`（单文件职责：发送客户端 + 接收端点处理 + 历史读写 + IPC 注册 + 事件推送；`initTransfer()` 入口）
-  - IPC：`transfer:status`（本机信息/接收目录）、`transfer:scan`（复用 scanPeers）、`transfer:pick-files`（dialog 多选）、`transfer:send`（`{peerIp, filePaths[]}` → offer→data→end 串行，流式读盘）、`transfer:history`、`transfer:open-received`（reveal 接收目录）。
-  - 事件（webContents.send）：`file-transfer:progress` `{tid,fid,name,sent,total,phase}`、`file-transfer:received` `{name,path,size,from}`、`file-transfer:batch-done` `{tid,ok,fail}`。
-  - 接收目录：`<fileCachePath>/文件互传/`（回退 documents）。
-- [ ] T2 渲染端 `src/views/fileTransfer/`：`index.vue`（薄壳）+ `components/DeviceList.vue`（扫描/手动 IP，参考 sync 页交互）+ `components/TransferPanel.vue`（选文件发送 + 逐文件进度条 el-progress + 取消批次）+ `components/TransferLog.vue`（历史记录）+ `api/fileTransferApi.ts`（invoke 薄封装，参考 syncApi.ts）+ `types.ts`。
-- [ ] T3 `src/store/useFileTransfer.ts`（Pinia：peers/selectedDevice/files/progress/logs/autoAccept）。
+在原 v1 三端点之上叠加下列字段/行为；**未开启时完全退化为既有明文行为**，老版本双端仍可互通（与移动端 `jianli-mobile-app/.../file-transfer-plan.md` §二之一 同构）。
 
-**修改**
-- [ ] T4 `syncModule.ts`：数据面路由改为可插拔——导出 `registerDataRoute(method, prefix, handler)`（同步 server 实例保存在模块内，/ping、/sync、/export 行为不变），`/file/*` 由 transferModule 注册。⚠️ 改主进程**必须重启 Electron**。
-- [ ] T5 `electron/main/index.ts`：import `initTransfer` + createWindow 内 `initSync()` 旁调用。
-- [ ] T6 `electron/preload/index.ts`：补 `on(channel, cb)` 透传（**仅放行 `file-transfer:` 前缀**）。
-- [ ] T7 菜单四件套：`src/router/index.ts` 加 `RouteNames.FILE_TRANSFER: "fileTransfer"` + 路由（path `/fileTransfer`，title 文件互传）；`src/utils/index.ts` iconMap 加 `fileTransfer: 'ArrowLeftRight'`；`src/layout/index.vue` groupDefs「系统与资源」组加 `fileTransfer`；`src/views/routeSetting/index.vue` groupDefs 同步加（可见开关）。
-- [ ] T8 `src/layout/index.vue` onMounted 全局监听 `file-transfer:received` → `fileNotify`（页面外也能弹蓝色路径通知）。
+- **#9 重名策略**：接收端按 `store._transfer_rename`（`'rename'` 默认 / `'overwrite'`）决定——`rename` 追加 ` (n)`，`overwrite` 先删同名再改名。`transfer:set-rename` 切换并持久化。
+- **#10 文件夹 / 拖拽**：`transfer:pick-files` 支持选目录（`openDirectory`）+ 递归 `walk` 展开为文件列表；渲染端支持拖拽文件夹。
+- **#11 最近设备**：扫描/发送过的对端持久化进 `store._transfer_recent`（`RecentPeer{ip,name,id,platform,lastSeen}`），`transfer:recent-peers` 读取、`transfer:forget-peer` 剔除；页面「最近设备」区离线也展示，点「发送」重发。与移动端 `RecentPeers` 同构。
+- **#13 断点续传**：offer 响应 `accepted` 每项带 `resumeFrom`（收端按 `.recv-${safeName}-${size}.part` 稳定名查已有字节数）；发送端 `postBinary` 带 `startOffset`，data 请求 `?from=resumeFrom`，Content-Length = `size - startOffset`，接收端 append + 用已有字节给 hash 播种。**加密批次不做续传**（CTR keystream 不可任意字节对齐）。
+- **#14 会话加密（默认关）**：发送端开启且 `encEnabled()` 时生成 `randomBytes(32)` key + `randomBytes(16)` iv，offer 带 `enc:{key,iv}` base64；对端确认后 `offer` 响应 `enc:true`，发送端 data 先 `tee` 算明文 hash 再 `createCipheriv('aes-256-ctr',key,iv)` 加密，Content-Length = `size - startOffset`；接收端 `createDecipheriv` 解密。**需收发双端均开启**。
+- **#15 接收询问模式**：`autoAccept=false` 时不立即拒（`403 rejected`），改经 `pendingAsk` + 事件 `file-transfer:incoming-ask` 弹确认框，等 UI 答复（`transfer:answer-offer {tid, accept}`）；`ASK_TIMEOUT_MS=60_000` 超时默认拒。
+- **#16 磁盘预估**：`handleOffer` 先 `freeSpaceBytes(dir)`（node `fs.statfsSync`）比对 `total`，不足回 `507 no space` 拒绝。**移动端无可靠 free-space API，仅软预估不硬拒**。
+- **#17 并发守卫**：同刻仅一个接收批次（`activeReceiveTid`）与一个发送批次（`activeSendTid`）；冲突回 `429 busy`。
+- **#20 历史分页 + 自动清理**：`transfer:history` 支持 `{limit,offset}` 返回 `{data,total}`；`handleEnd` 后 `trimHistory()` 超 `MAX_HISTORY_ROWS=1000` 删最旧。移动端 `TransferRepository.list/trim(1000)` 同语义。
 
-**数据**
-- [ ] T9 `initTransfer()` 内 `ensureTableExists('file_transfer', [...列如上], 'key', {primaryKeyType:'TEXT'})`。
+## 三、实施决策与偏差（相对原草案）
+- **数据面可插拔**：`syncModule.ts` 由串行 if 改为导出 `registerDataRoute(method, prefix, handler)`；`transferModule.ts` 的 `initTransfer()` 注册 `/file/*` 三端点，共用 47124 服务实例。违背「改主进程需重启 Electron」红线——见维护说明。
+- **preload `on` 透传**：实测 preload 已原生 `on(...)` 透传全部通道，无需为 `file-transfer:` 前缀单独改造（草案 T6 的改造被省去）。渲染端经 `window.ipcRenderer.on` 订阅 `file-transfer:progress/received/batch-done`。
+- **取消批次（已完成，2026-09-06）**：桌面端 `sendBatch` 每批次建 `AbortController`（存 `abortControllers[tid]`），`postBinary` 的 `fetch` 带其 `signal`；`transfer:cancel {tid}` 置位 `cancelFlags[tid]` 并 `abort()`，中止流式上传，当前文件记 `canceled`、其后文件不再发送。⚠️ `transfer:send` 的 handle 要等整批结束才返回，**tid 只能经开头的初始 `file-transfer:progress` 事件带出**，渲染端据此调用取消（发送中 UI 显示「取消发送」）。取消语义：用户在传输中途点「取消发送」→ 当前文件标 canceled，后续文件不再发；非取消的失败不中断整批（记 failed 后继续下一个）。
+- **发送端历史 `peer_name`**：offer 响应回传本机设备信息 `me`（双端都回），发送端据此回填对端名，不再空白（对端未回传时回退 `peer_ip`）。
+- **接收目录**：`<fileCachePath>/文件互传/`（回退 documents）；`.part` 临时文件同目录，正常流程 `handleEnd` 改名；取消/中断/校验失败的孤立 `.part` 由 `sweepStale()` 定时（10min）+ 启动期清理（2026-09-06 新增）。
+- **图标**：菜单 iconMap 用 `ArrowLeftRight`，已补进 `LucideIcon.vue` 的 `nameMap`（该组件仅渲染 nameMap 内显式注册的图标）。
+- **无新增依赖**：桌面端纯 node 原生（http/fs/stream/crypto），渲染端复用既有 Element Plus / Pinia；移动端纯 dart:io + 既有 file_picker/crypto/uuid。
 
-**文档（实施后）**
-- [ ] T10 新建 `references/modules/file-transfer.md`；`references/ipc-channels.md` 补通道表；`references/modules/sync.md` 补「数据面路由可插拔」小节；本 SKILL.md 导航与维护说明回写；`.workbuddy` 副本同步。
+## 四、桌面端任务完成状态（T1–T10）
+- [x] T1 `transferModule.ts`：发送客户端 + 接收端点 + 历史 + IPC + 事件推送
+- [x] T2 `src/views/fileTransfer/`：index 薄壳 + DeviceList/TransferPanel/TransferLog + api + types
+- [x] T3 `useFileTransfer.ts`：Pinia（peers/files/progress/history/autoAccept + bindEvents）
+- [x] T4 `syncModule.ts`：可插拔路由 `registerDataRoute`
+- [x] T5 `index.ts`：`import initTransfer` + createWindow 内 `initSync()` 旁调用
+- [x] T6 preload `on`：实测已原生透传，无需改造
+- [x] T7 菜单四件套：`RouteNames.FILE_TRANSFER` + 路由 `/fileTransfer` + iconMap `ArrowLeftRight` + layout/routeSetting 组
+- [x] T8 `layout/index.vue` 监听 `file-transfer:received` → `fileNotify`
+- [x] T9 `ensureTableExists('file_transfer', ..., 'key', {primaryKeyType:'TEXT'})`
+- [x] T10 文档：本决策记录 + `modules/file-transfer.md` + ipc-channels/sync 补章节 + SKILL.md 回写
+- [x] **T11（2026-09-06）健壮性 + 体验补齐**：进度节流（~100ms，修复累计字节回传 bug）/ `.part` 定时清理 + `incoming` 回收 / 历史 `error` 列（双端）/ sha256 双端校验 / 桌面端历史「打开文件 / 打开所在文件夹」/ 批次总进度·速率·ETA / 移动端历史「打开 / 分享」（`open_filex`+`share_plus`）/ `peer_name` 经 offer `me` 回填
+- [x] **T12（2026-09-06 二批 · 全部剩余增强已落地）**：
+  - `transferModule.ts`：#9 重名策略（`store._transfer_rename` `'rename'`/`overwrite'` + `transfer:set-rename`）/ #10 文件夹·拖拽（`transfer:pick-files` 支持 `openDirectory` 递归 `walk` 展开；渲染端拖拽文件夹）/ #11 最近设备（`store._transfer_recent` + `transfer:recent-peers` + `transfer:forget-peer`）/ #13 续传（`postBinary` 带 `startOffset`、data `?from=N`、接收端 append + 用已有字节给 hash 播种）/ #14 加密（`encEnabled()` 生成 `randomBytes(32/16)`、offer 带 `enc`、data `createCipheriv('aes-256-ctr')` 密文流）/ #15 询问（`pendingAsk` + 事件 `file-transfer:incoming-ask` + `transfer:answer-offer {tid,accept}`、`ASK_TIMEOUT_MS=60_000`）/ #16 磁盘预估（`freeSpaceBytes(dir)` 用 `fs.statfsSync`，不足回 `507 no space`）/ #17 并发守卫（`activeReceiveTid`/`activeSendTid`，冲突回 `429 busy`）/ #20 分页+清理（`transfer:history` 支持 `{limit,offset}` 返 `{data,total}`、`handleEnd` 后 `trimHistory()` 删最旧超 `MAX_HISTORY_ROWS=1000`）。
+  - `src/views/fileTransfer/`：最近设备区（#11）/ 重名策略开关（#9）/ 加密开关（#14）/ 接收询问弹窗（订阅 `file-transfer:incoming-ask`，#15）/ 历史「加载更多」（#20）。
+  - 桌面端本批 IPC 通道：`transfer:recent-peers` / `transfer:forget-peer` / `transfer:set-rename` / `transfer:set-enc` / `transfer:answer-offer`（#25/#26 前序已落地，本批沿用并接入 UI）。
+  - ⚠️ 加密批次不做续传（CTR keystream 不可任意字节对齐），与移动端同语义。
 
-## 五、移动端任务清单（jianli-mobile-app）
+## 五、验证清单（命令由用户本地执行）
+1. **重启 Electron**（改了主进程 transferModule/syncModule/index）。
+2. PC 发手机：批量 ≥3 文件（含大文件），逐文件进度 + 结果；手机 `Documents/渐离App文件互传/` 收到。
+3. 手机发 PC：批量发送；PC `fileNotify` 蓝色路径通知 + 历史正确。
+4. 手动 IP：模拟器填 `10.0.2.2` 直传。
+5. 边界：重名去重 ` (n)`、非法文件名、接收方关自动接收→发送端被拒。
+6. **取消批次**：发大文件途中点「取消发送」→ 当前文件进度转橙色（canceled）、后续文件不再发送、历史出现 `canceled` 记录、按钮恢复可用；取消后 PC 不应崩溃、可再次发送。
+7. **热点场景**：手机开热点给 PC，PC 侧点「扫描」应能发现手机（定向广播 + 网关单播，见可选项 A）；再双向收发一次。
+8. **sha256 校验**：正常收发后两端历史均 `done`；可人为截断接收（如中途杀进程）观察孤立 `.part` 被 `sweepStale` 清掉；校验失败路径（理论）历史记 `failed` 且 `error` 非空、不弹通知。
+9. **历史可操作**：桌面端成功记录点「打开文件」「打开所在文件夹」应正确打开/定位；移动端成功记录点「打开」「分享」。
+10. **总进度/速率/ETA**：发送中面板顶部显示批次总进度条 + 速率 + 剩余时间。
 
-**新建（`lib/features/file_transfer/`，feature-first 原子拆分 + 中文注释）**
-- [ ] M1 `services/transfer_client.dart`（发送：offer→`req.addStream(file.openRead())`→end，字节回调节流进度，支持取消批次）。
-- [ ] M2 `services/transfer_server.dart`（接收：offer/data/end 三端点实现，注册进 SyncService 路由钩子；接收目录 `Documents/渐离App文件互传/`）。
-- [ ] M3 `models/transfer_models.dart` + `repositories/transfer_repository.dart`（drift 历史读写）+ `providers/file_transfer_providers.dart`（**顶层声明**，禁 build 内联——雷区 #9）。
-- [ ] M4 `components/file_transfer_page.dart`（页面：PageBanner 粉 `accentIndex 4` + 设备扫描/手动 IP（模拟器 10.0.2.2）+ 选文件发送（file_picker 多选）+ FDeterminateProgress 逐文件进度 + 接收/发送记录列表；入页即 `startServer + startResponder`（均幂等，与 sync 页同款 `_init()`））。
-
-**修改**
-- [ ] M5 `lib/core/sync/sync_service.dart`：加可插拔路由注册 API（`registerRouteHandler`，保持既有端点行为不变）。
-- [ ] M6 drift：新建 `lib/core/db/tables/file_transfer.dart`（列名 `.named()` 对齐上表）+ `app_database.dart` 注册 + **schemaVersion 1→2 + onUpgrade 首个迁移**（`m.createAll()`，drift 官方姿势，只建缺失表）→ **需跑 build_runner**。
-- [ ] M7 `lib/app/router/app_router.dart` 加 `/file-transfer`（fadeSlidePage）；`lib/features/hubs/hub_pages.dart` 工具组加入口（`FLucideIcons.arrowLeftRight`，**先到 forui_lucide assets.g.dart grep 验证**，accent 4）。
-- [ ] M8 `android/app/src/main/AndroidManifest.xml`：加 `<uses-permission android:name="android.permission.INTERNET"/>` + `<application>` 加 `android:usesCleartextTraffic="true"`（**release 包必需**，否则局域网明文 HTTP 被 Android 拦）。
-- [ ] M9 pubspec **不新增依赖**（dart:io HttpClient + file_picker + crypto 已有）；file_picker 12.x 多选参数以包内实际签名为准（实施时先 grep 插件 API）。
-
-**文档（实施后）**
-- [ ] M10 SKILL.md：功能域清单加 file-transfer 行、「局域网同步」章节补文件协议、维护说明记一条；`references/file-transfer-plan.md` 转为决策记录。
-
-## 六、验证清单（实施后走一遍，命令由用户本地执行）
-
-1. 桌面端**重启 Electron**（改了主进程）；移动端 `flutter pub get → dart run build_runner build -d → flutter analyze（基线 0）→ flutter test（基线 5/5）→ flutter run -d emulator-5554`。
-2. PC 发手机：选 ≥3 个文件（含大文件）批量发送，逐文件进度、结果落历史；手机端「文件互传」页与「接收目录」都能看到。
-3. 手机发 PC：批量发送；PC 端 fileNotify 蓝色路径通知 + 历史记录正确。
-4. 手动 IP：模拟器场景手机端填 `10.0.2.2` 直传。
-5. 边界：重名文件去重 ` (n)`；文件名含非法字符；接收方「自动接收」关闭时发送端收到拒绝提示；取消批次后剩余文件状态 canceled。
-6. 热点场景：手机开热点给 PC，从**手机侧**扫描发起互传（PC 侧扫描为已知受限，见可选项 A）。
-
-## 七、v1 裁剪与可选项（需用户表态）
-
-- **可选项 A（建议做）**：把移动端已修的 `broadcastCandidates()`（逐网卡 /24 定向广播）移植到桌面 `scanPeers()`，解决热点场景 PC 扫不到手机（改动小，但动 syncModule.ts，需重启 Electron）。
-- P2：sha256 完整校验；断点续传（data 分块带 seq）；移动端接收文件「打开/分享」（需引 share_plus）；移动端文件预览。
-- P3：传输会话加密（与同步协议加密同一规划）。
-- 不做：传输历史跨设备同步（设备本地记录）；传输经云端中转（纯局域网直连）。
+## 六、v1 裁剪与后续（P2/P3）
+- [x] **可选项 A（已完成，2026-09-06）**：`syncModule.ts` 新增 `discoveryTargets()`——全网受限广播 `255.255.255.255` + 每个 IPv4 非回环接口按真实掩码算的定向广播 `x.y.z.255` + 网关 `x.y.z.1` 单播；`scanPeers` 向全部目标各发一份发现包（应答按 ip 去重）。解决热点场景 PC 扫不到手机。sync 与 transfer 共用 `scanPeers`，同步页一并受益（动 syncModule.ts，需重启 Electron）。
+- [x] **sha256 完整校验（已完成，2026-09-06）**：双端流式算 sha256，发送端经 `/file/end` 的 `{hash}` 带出，接收端比对；不一致删坏文件、历史记 `failed`(error=`hash mismatch`)，不弹通知。
+- [x] **移动端接收文件「打开/分享」（已完成，2026-09-06）**：新增 `open_filex`+`share_plus`，历史成功记录可「打开」「分享」。
+- [x] **健壮性 + 体验补齐（已完成，2026-09-06）**：进度节流、`.part` 定时清理、`incoming` 回收、历史 `error` 列、桌面端历史打开/定位、批次总进度·速率·ETA、`peer_name` 回填。
+- [x] **P2 断点续传（已完成，2026-09-06 二批）**：data 带 `?from=N` 追加写 + hash 播种；加密批次整文件重发（见 §二之一 #13）。
+- [x] **P3 会话加密（已完成，2026-09-06 二批）**：AES-256-CTR，offer 协商 `enc` 字段、data 密文流；默认关、向后兼容（见 §二之一 #14）。
+- [x] **#9 重名覆盖策略 / #10 文件夹·拖拽 / #11 最近设备 / #15 接收询问 / #16 磁盘预估 / #17 并发守卫 / #20 历史分页+自动清理**（均已完成，2026-09-06 二批，见 §二之一）。
+- 不做：传输历史跨设备同步（设备本地）；云端中转（纯局域网直连）。

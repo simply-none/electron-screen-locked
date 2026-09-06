@@ -75,6 +75,37 @@ function deviceId(): string {
   return String(h);
 }
 
+// ---------------------------------------------------------------------------
+// 数据面可插拔路由：文件互传等模块向 47124 注入自定义端点（不新开端口）
+// ---------------------------------------------------------------------------
+
+/** 可插拔路由处理器（与内置 /ping /sync /export 同签名） */
+export type DataRouteHandler = (
+  req: import("node:http").IncomingMessage,
+  res: import("node:http").ServerResponse,
+) => Promise<void> | void;
+
+interface DataRoute {
+  method: string;
+  prefix: string;
+  handler: DataRouteHandler;
+}
+
+/** 已注册的可插拔路由（模块级单例，server 每个请求动态查询） */
+const dataRoutes: DataRoute[] = [];
+
+/**
+ * 注册一个数据面路由：命中 method + url 前缀即交由 handler 处理。
+ * 文件互传模块据此注入 /file/offer、/file/data、/file/end，/ping /sync /export 行为不变。
+ */
+export function registerDataRoute(
+  method: string,
+  prefix: string,
+  handler: DataRouteHandler,
+): void {
+  dataRoutes.push({ method, prefix, handler });
+}
+
 function deviceInfo() {
   return {
     name: os.hostname(),
@@ -110,6 +141,13 @@ function startDiscoveryResponder(): dgram.Socket {
 function startDataServer(): http.Server {
   const server = http.createServer(async (req, res) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
+    // 先走可插拔路由（文件互传 /file/* 等），命中即处理并结束响应
+    for (const r of dataRoutes) {
+      if (req.method === r.method && req.url?.startsWith(r.prefix)) {
+        await r.handler(req, res);
+        return;
+      }
+    }
     if (req.method === "GET" && req.url === "/ping") {
       res.end(JSON.stringify(deviceInfo()));
       return;
@@ -175,7 +213,36 @@ function startDataServer(): http.Server {
 // 主动同步能力（PC 作为客户端）：扫描 / 推送 / 拉取
 // ---------------------------------------------------------------------------
 
-/** 扫描局域网对端：UDP 广播发现包，收集 3 秒应答，按 ip 去重并排除自身 */
+/**
+ * 发现请求的目标地址集合（解决「PC 连手机热点时 255.255.255.255 受限广播走默认路由、
+ * 到不了热点网段」的发现盲区，与移动端 sync_discovery.dart 的 broadcastCandidates 思路一致）：
+ *   - 全网受限广播 255.255.255.255（普通同网段场景兜底）
+ *   - 每个 IPv4 非回环接口的「定向广播 x.y.z.255」（按真实子网掩码计算，比移动端 /24 假设更准）
+ *   - 各接口网关 x.y.z.1 单播（手机开热点时手机即网关，单播必达，热点场景关键兜底）
+ */
+function discoveryTargets(): string[] {
+  const set = new Set<string>(["255.255.255.255"]);
+  const ifaces = os.networkInterfaces();
+  for (const list of Object.values(ifaces)) {
+    if (!list) continue;
+    for (const ni of list) {
+      if (ni.family !== "IPv4" || ni.internal) continue;
+      const octets = ni.address.split(".");
+      if (octets.length !== 4) continue;
+      // 定向广播 = ip | ~mask（按真实子网掩码逐字节计算）
+      const mask = ni.netmask.split(".").map(Number);
+      if (mask.length === 4) {
+        const bc = octets.map((o, i) => (Number(o) | (~mask[i] & 255)) & 255);
+        set.add(bc.join("."));
+      }
+      // 网关单播（常见 .1，手机热点即网关）
+      set.add(`${octets[0]}.${octets[1]}.${octets[2]}.1`);
+    }
+  }
+  return [...set];
+}
+
+/** 扫描局域网对端：向多个目标地址发送 UDP 发现包，收集 3 秒应答，按 ip 去重并排除自身 */
 export function scanPeers(timeoutMs = 3000): Promise<SyncPeer[]> {
   return new Promise((resolve) => {
     const found = new Map<string, SyncPeer>();
@@ -196,11 +263,14 @@ export function scanPeers(timeoutMs = 3000): Promise<SyncPeer[]> {
       }
     });
     sock.on("error", () => done());
+    const packet = Buffer.from(DISCOVER_PACKET, "utf8");
     sock.bind(() => {
       try { sock.setBroadcast(true); } catch { /* 部分 平台无需 */ }
-      sock.send(Buffer.from(DISCOVER_PACKET, "utf8"), DISCOVERY_PORT, "255.255.255.255", (err) => {
-        if (err) console.warn("[sync] scan send failed:", err.message);
-      });
+      for (const target of discoveryTargets()) {
+        sock.send(packet, DISCOVERY_PORT, target, (err) => {
+          if (err) console.warn("[sync] scan send failed:", target, err.message);
+        });
+      }
       setTimeout(done, timeoutMs);
     });
   });

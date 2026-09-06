@@ -43,11 +43,11 @@ agent_created: true
 - 主题与视觉约定（token 清单 / 严禁硬编码 / 禁用未全覆盖的 --el-* / 派生色用 color-mix）：`references/theme.md`
 - 已知差异与风险：`references/risks.md`
 - Flutter 移动端移植计划（跨端 / 双端同步）：`references/flutter-port.md`
-- 文件互传双端方案与任务清单（**待用户确认后实施**，完成后转正为模块文档）：`references/file-transfer-plan.md`
+- 文件互传双端方案与决策记录（**已实施完成**，2026-09-06；同日追加「桌面端 `transfer:cancel` 取消批次 / `scanPeers()` 热点定向广播 / 第一批 sha256 双端校验·历史 `error` 列·进度节流 + `.part` 清理 + `incoming` 回收·`peer_name` 回填·桌面端历史打开·定位·批次总进度·速率·ETA·移动端历史打开·分享」；**二批（M12/T12）再补 #9 重名覆盖 / #10 文件夹·拖拽 / #11 最近设备 / #13 断点续传 / #14 会话加密(AES-256-CTR,默认关) / #15 接收询问 / #16 磁盘预估 / #17 并发守卫 / #19 移动后台保活 / #20 历史分页+自动清理**，全部向后兼容）：`references/file-transfer-plan.md`；模块文档：`references/modules/file-transfer.md`
 - 逐模块文档（`references/modules/`，处理具体模块前先读对应文件）：
   - **效率 / 提醒类**：`habit` `reminder` `todo` `pomodoro` `countdown` `command-palette` `theme-conversation` `window-mode` `shortcut` `home-mode` `route-setting` `settings` `quick-note` `sticker` `app-lock` `two-factor` `file-vault`
   - **内容 / 数据类**：`clipboard` `notebook` `categorizable-notes` `ebook-reader` `accounting` `stock` `flow` `function` `color-palette` `resume`
-  - **系统 / 工具类**：`system-info` `weather` `crawler` `spider` `high-perf-sql` `file-rela` `resource-manage` `screenshot` `browser` `downloader` `about` `safety-protection` `app-cache` `backup` `tts` `small-window` `home` `data-acquisition` `dev-toolbox` `qr-code` `sync`
+  - **系统 / 工具类**：`system-info` `weather` `crawler` `spider` `high-perf-sql` `file-rela` `resource-manage` `screenshot` `browser` `downloader` `about` `safety-protection` `app-cache` `backup` `tts` `small-window` `home` `data-acquisition` `dev-toolbox` `qr-code` `sync` `file-transfer`
 
 ## 使用方式
 1. 接到本项目任务，先判断属于「架构 / 数据 / IPC / 小窗 / 复用模式」哪一类，读对应核心参考。
@@ -57,6 +57,6 @@ agent_created: true
 
 ## 维护说明
 - 本 skill 是「项目知识基线」，随代码演进而更新。每次大改动后同步 `risks.md` 与对应模块文档。
-- 2026-09-06：新增双端「文件互传」需求（批量收发、双端对称）。双端方案与任务清单已产出**待确认**：`references/file-transfer-plan.md`（复用 47123/47124 设施扩展 /file/* 端点、新增 transfer 主进程模块与 fileTransfer 页面、双端同构 file_transfer 历史表）。确认后按清单实施并回写模块文档。
+- 2026-09-06：**双端「文件互传」已实施完成**（批量收发、双端对称），并完成两批后续。桌面端 `electron/main/module/transfer/transferModule.ts`：`initTransfer()` 注册 /file/* 三端点 + 发送客户端（流式 + 进度节流 + 算 sha256 + 可 `transfer:cancel` 中止）+ 历史读写（含 `error` 列）+ IPC（status/scan/pick-files[#10 支持选目录]/send/cancel/history[#20 分页]/open-received/open-file/open-folder/set-auto-accept/**set-rename(#9)/set-enc(#14)/recent-peers(#11)/forget-peer(#11)/answer-offer(#15)**）+ 4 类事件（progress/received/batch-done/**incoming-ask(#15)**）；`syncModule.ts` 数据面可插拔路由 `registerDataRoute` 且 `scanPeers()` 支持热点定向广播 + 网关单播；`sweepStale()` 定时清理残留 `.part` 与超时 `incoming`。二批增强（T12，向后兼容）：#9 重名覆盖 / #10 文件夹·拖拽 / #11 最近设备 / #13 断点续传（data `?from=N` + hash 播种，加密批次整文件重发）/ #14 会话加密（AES-256-CTR，offer `enc` 协商，默认关）/ #15 接收询问（pendingAsk + `incoming-ask` 事件，60s 超时拒）/ #16 磁盘预估（`fs.statfsSync`，不足 `507`）/ #17 并发守卫（activeReceiveTid/activeSendTid，冲突 `429`）/ #20 历史分页 + `trimHistory(1000)`。渲染端 `src/views/fileTransfer/`（薄壳 + DeviceList/TransferPanel[含批次总进度·速率·ETA + 取消 + 最近设备·重名·加密·询问开关]/TransferLog[可打开·定位·加载更多 + 失败原因] + api + `useFileTransfer` store[批次聚合]），菜单四件套接入（路由 `/fileTransfer`、iconMap `ArrowLeftRight` 已加进 `LucideIcon` nameMap）、`layout/index.vue` 监听 `file-transfer:received` → `fileNotify`；移动端同协议同历史表（含 `error` 列、sha256、offer `me` 回传、历史打开/分享、#9/#11/#13/#14/#15/#16/#17/#19/#20 同语义）。决策记录：`references/file-transfer-plan.md`；模块文档：`references/modules/file-transfer.md`。改主进程**必须重启 Electron**；移动端改 `tables/file_transfer.dart` 后**须 `dart run build_runner build -d`**。
 - 2026-09-05：**局域网同步白名单扩容（移动端主题对话对齐）**——`syncModule.ts` 与 `src/store/useSync.ts` 加入主题对话三表 `conversation_theme` / `conversation` / `conversation_tag`（INTEGER 自增 id 主键）；新增 `tablePk()` 按表适配主键（conversation* → `id`，其余 → `key`），upsert 走 `ON CONFLICT(pk) DO UPDATE`。详见 `references/modules/sync.md` 白名单小节；**改完需重启 Electron**。
 - 新增模块时：在 `references/modules/` 加一份文档，并在上方「逐模块文档」导航里补一行。

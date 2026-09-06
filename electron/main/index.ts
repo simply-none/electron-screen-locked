@@ -44,6 +44,7 @@ import { initTwoFactor } from "./module/twoFactor.ts";
 import { initPasswordVault } from "./module/passwordVault.ts";
 import { initFileVault } from "./module/fileVault.ts";
 import { initSync } from "./module/sync/syncModule.ts";
+import { initTransfer } from "./module/transfer/transferModule.ts";
 import {
   registerShellMenu,
   initShellMenu,
@@ -172,6 +173,8 @@ async function createWindow() {
   initFileVault();
   // 局域网同步模块（LocalSend-like：UDP 发现 + HTTP 数据面，与 Flutter 移动端同协议）
   initSync();
+  // 文件互传模块（与移动端 feature/file_transfer 同协议，复用 47124 数据面，不新开端口）
+  initTransfer();
   // 资源管理器右键菜单（Windows 专属）：注册「通过渐离App打开」菜单（按扩展名限定 + 打开方式 ProgID）
   registerShellMenu();
   // 右键菜单管理 IPC（启用集合 / 默认打开 / 重新注册）

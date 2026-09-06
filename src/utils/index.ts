@@ -169,6 +169,7 @@ export const iconMap: Record<string, string> = {
   qrCode: 'QrCode',
   twoFactor: 'KeyRound',
   pdfTools: 'FileBox',
+  fileTransfer: 'ArrowLeftRight',
 };
 
 export { getLightColor, getDarkColor } from './color';

@@ -56,6 +56,7 @@
 - **截图 / 贴纸**：`screenshot:*` / `sticker:*`
 - **股票**：`stock:*` 约 30 个（TickFlow，含缓存 / TTL / 自选）
 - **加密**：`encrypt-pwd` / `decrypt-pwd` / `compare-pwd`
+- **文件互传（局域网批量收发，复用 47124 数据面）**：`transfer:status` / `transfer:scan` / `transfer:pick-files`（#10 支持选目录递归展开）/ `transfer:send` / `transfer:cancel`（取消批次，`{tid}`；tid 经 `file-transfer:progress` 事件带出）/ `transfer:history`（#20 支持 `{limit,offset}` 返 `{data,total}`）/ `transfer:open-received` / `transfer:open-file`（`{path}` 用系统关联程序打开指定历史文件）/ `transfer:open-folder`（`{path}` 在资源管理器定位）/ `transfer:set-auto-accept` / `transfer:set-rename`（#9 rename/overwrite）/ `transfer:set-enc`（#14 加密开关）/ `transfer:recent-peers`（#11 读）/ `transfer:forget-peer`（#11 剔除）/ `transfer:answer-offer`（#15 `{tid,accept}` 答复接收询问）；主→渲染推送 `file-transfer:progress` / `file-transfer:received` / `file-transfer:batch-done` / `file-transfer:incoming-ask`（#15 `{tid,name,count,total}`，preload `on` 透传，仅 `file-transfer:` 前缀；见 `modules/file-transfer.md`）
 - **更新**：`get-app-version` / `check-for-update` / `download-update` / `install-update` / `open-external-url`（`download-progress` 主→渲染）
 - **主窗口**：`quit-app` / `max` / `set-startup` / `hide-app` / `palette-navigate` / `open-match-page`(主→渲染) / `confirm-hide-app`(主→渲染)
 

@@ -15,7 +15,7 @@ PC 与移动端（Flutter App）在同一局域网内互相发现并同步业务
 ## 关键文件
 - 主进程：`electron/main/module/sync/syncModule.ts`（发现应答 + 数据服务 + 主动扫描/推送/拉取 + IPC；**改完必须重启 Electron**）
   - 被动：`startDiscoveryResponder()`（UDP 应答）/ `startDataServer()`（/ping、/export、POST /sync）
-  - 主动：`scanPeers()`（UDP 广播 3 秒收集、排除自身）/ `pushTables(ip, tables)`（query 本地 → POST 对端）/ `pullTables(ip, tables)`（GET 对端 → upsert 本地）
+  - 主动：`scanPeers()`（3 秒收集、排除自身；**向多个目标各发一份**发现包——`discoveryTargets()` = 全网受限广播 `255.255.255.255` + 每个 IPv4 非回环接口的定向广播 `x.y.z.255` + 网关 `x.y.z.1` 单播；2026-09-06 修复「手机开热点时 PC 扫不到手机」，与移动端 `broadcastCandidates()` 同思路，文件互传共用此函数一并受益）/ `pushTables(ip, tables)`（query 本地 → POST 对端）/ `pullTables(ip, tables)`（GET 对端 → upsert 本地）
   - IPC：`sync:status` / `sync:scan` / `sync:push` / `sync:pull`（`{success, data}` 约定）
   - 注册：`electron/main/index.ts` 的 `initSync()`（createWindow 末尾）
 - 渲染端（渲染端不 import electron，全走 IPC）：
@@ -25,6 +25,9 @@ PC 与移动端（Flutter App）在同一局域网内互相发现并同步业务
   - `src/views/sync/index.vue` —— 页面薄壳（本机状态条 + 设备 + 表选择 + 日志）
   - `src/views/sync/components/` —— `DeviceList.vue`（设备卡：拉取/发送）/ `TableSelector.vue`（表勾选）/ `SyncLog.vue`（日志，纯展示）
 - 落地：路由 `/sync`（RouteNames.SYNC）；侧边栏「系统与资源」组；routeSetting 可见开关；iconMap `sync: 'RefreshCw'`
+
+## 数据面路由可插拔（file-transfer 复用同一 47124）
+`syncModule.ts` 的 HTTP 数据面已从「串行 if 分支」改造为「可插拔注册」：`registerDataRoute(method, prefix, handler)` 导出后，file-transfer 模块在 `initTransfer()` 注册 `/file/offer`、`/file/data`、`/file/end` 三个路由，与 `/ping`、`/sync`、`/export` 共用同一 47124 服务实例。服务端处理循环先遍历 `dataRoutes`（前缀匹配）再回退原有 if 分支 / 404。详见 `modules/file-transfer.md`。⚠️ 改 syncModule.ts 或 transferModule.ts 都必须重启 Electron。
 
 ## 移动端对应实现
 - `jianli-mobile-app/lib/core/sync/sync_discovery.dart`（UDP 发现）/ `sync_service.dart`（HTTP + PRAGMA 过滤列幂等写入；含对称的 `/export` 拉取端点）/ `features/sync`（同步页）

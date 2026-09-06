@@ -116,6 +116,7 @@ import useTheme, { themeOptions, type ThemeName } from '@/store/useTheme';
 import { watch } from 'vue';
 import { getStore } from '@/utils/common';
 import { iconMap } from '@/utils';
+import { fileNotify } from '@/utils/fileNotify';
 import useGlobalSetting from '@/store/useGlobalSetting';
 
 // 为每个路由注入图标到 meta
@@ -132,7 +133,7 @@ interface MenuGroup {
 
 const groupDefs: MenuGroup[] = [
   { label: '通用', names: ['setting', 'newTips', 'homeMode', 'windowMode'] },
-  { label: '系统与资源', names: ['systemInfo', 'routeSetting', 'appCache', 'backup', 'fileRela', 'resourceManage', 'safetyProtection', 'sync'] },
+  { label: '系统与资源', names: ['systemInfo', 'routeSetting', 'appCache', 'backup', 'fileRela', 'resourceManage', 'safetyProtection', 'sync', 'fileTransfer'] },
   { label: '效率工具', names: ['pomodoroRecord', 'clipboard', 'notebookApp', 'categorizableNotes', 'themeConversation', 'todoList', 'habit', 'countdown', 'accounting', 'stock', 'earning', 'resume', 'registerShortcut', 'function', 'weather', 'browser', 'ebookReader', 'screenshot', 'downloader', 'colorPalette', 'qrCode', 'twoFactor', 'passwordVault', 'pdfTools', 'fileVault'] },
   { label: '开发工具', names: ['netRequest', 'highPerfSql', 'flow', 'ttsTest', 'dataAcquisition', 'devToolbox'] },
   { label: '关于', names: ['about'] },
@@ -172,8 +173,18 @@ function handleMenuRefresh() {
   menuRefreshKey.value++;
 }
 
+/** 文件互传：对端发来文件落地后，即使不在文件互传页也弹蓝色路径通知 */
+function handleFileReceived(
+  _e: unknown,
+  payload: { name: string; path: string; size: number; from: string },
+) {
+  fileNotify({ title: "收到文件", message: `来自 ${payload.from}`, filePath: payload.path });
+}
+
 onMounted(() => {
   window.addEventListener('route-setting-changed', handleMenuRefresh);
+  // 文件互传：接收方收到文件后，即使不在文件互传页也弹蓝色路径通知
+  window.ipcRenderer.on('file-transfer:received', handleFileReceived);
   // 预热快捷键注册页 chunk，避免首次进入时因懒加载编译/下载产生的「暂停」感
   // 与 router 中 () => import(...) 指向同一模块，Vite 复用同一 chunk
   const preload = () => import('@/views/registerShortcut/index.vue').catch(() => {});
@@ -186,6 +197,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('route-setting-changed', handleMenuRefresh);
+  window.ipcRenderer.off('file-transfer:received', handleFileReceived);
 });
 
 const router = useRouter();

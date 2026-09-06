@@ -71,6 +71,7 @@ export const RouteNames = {
   PDF_TOOLS: "pdfTools",
   PASSWORD_VAULT: "passwordVault",
   FILE_VAULT: "fileVault",
+  FILE_TRANSFER: "fileTransfer",
 } as const;
 
 export type RouteNameType = typeof RouteNames[keyof typeof RouteNames];
@@ -428,6 +429,14 @@ export const layoutRouters: RouteRecordRaw[] = [
     component: () => import("@/views/pdfTools/index.vue"),
     meta: {
       title: "PDF 工具箱",
+    },
+  },
+  {
+    path: "/fileTransfer",
+    name: RouteNames.FILE_TRANSFER,
+    component: () => import("@/views/fileTransfer/index.vue"),
+    meta: {
+      title: "文件互传",
     },
   },
 ];

@@ -126,6 +126,7 @@ import { AlarmClock, AlarmClockCheck, AlarmClockMinus, AlarmClockPlus, ArrowDown
   GitCompare,
   Replace,
 } from '@lucide/vue';
+import { ArrowLeftRight } from '@lucide/vue';
 import { ref } from 'vue';
 import { getLightColor } from '@/utils';
 withDefaults(
@@ -292,6 +293,7 @@ let nameMap = ref<Record<any, any>>({
   ArrowUp,
   Plus,
   ArrowDown,
+  ArrowLeftRight,
   MinusIcon,
   BookmarkPlus,
   BookmarkXIcon,
