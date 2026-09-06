@@ -28,7 +28,7 @@
       <div class="app-badge">
         <img class="app-logo" src="/logo.svg" alt="logo" />
         <div class="app-info">
-          <span class="app-name">渐离 App</span>
+          <span class="app-name">{{ nickname }}</span>
           <span class="version-tag">v{{ pkg.version }}</span>
         </div>
       </div>
@@ -37,6 +37,7 @@
 </template>
 
 <script lang="ts" setup>
+import { ref, onMounted } from 'vue'
 import pkg from '../../package.json'
 
 const props = defineProps({
@@ -51,6 +52,17 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['back'])
+
+// 顶部栏展示随机昵称（主进程 3 天有效期，过期自动重生成）
+const nickname = ref('渐离 App')
+onMounted(async () => {
+  try {
+    const n = await window.ipcRenderer.invoke('transfer:nickname')
+    if (n) nickname.value = n
+  } catch {
+    /* 取不到就回退默认文案 */
+  }
+})
 
 function back () {
   emit('back')
