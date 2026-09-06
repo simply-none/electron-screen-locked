@@ -67,12 +67,26 @@ const SUB_COMMANDS: SubCommand[] = [
   { id: 'JianliApp.Decrypt', name: '解密(.jlv)', action: 'decrypt', flag: '--vault-decrypt', exts: ['.jlv'] },
   { id: 'JianliApp.SecureDelete', name: '安全删除', action: 'secure-delete', flag: '--vault-secure-delete', exts: ['*'] },
   { id: 'JianliApp.OpenReader', name: '用渐离阅读', action: 'open-reader', flag: '--open-reader', exts: ['.epub', '.pdf', '.txt'] },
-  { id: 'JianliApp.PdfCompress', name: 'PDF 压缩', action: 'pdf-compress', flag: '--pdf-compress', exts: ['.pdf'] },
-  { id: 'JianliApp.PdfSplit', name: 'PDF 拆分', action: 'pdf-split', flag: '--pdf-split', exts: ['.pdf'] },
-  { id: 'JianliApp.PdfMerge', name: 'PDF 合并', action: 'pdf-merge', flag: '--pdf-merge', exts: ['.pdf'] },
-  { id: 'JianliApp.PdfExtractAttach', name: 'PDF 提取附件', action: 'pdf-extract-attach', flag: '--pdf-extract-attach', exts: ['.pdf'] },
-  { id: 'JianliApp.PdfToImage', name: 'PDF 转图片', action: 'pdf-to-image', flag: '--pdf-to-image', exts: ['.pdf'] },
+  // ===== PDF 右键菜单（已禁用：仅注释，未删除） =====
+  // 2026-09-06：这 5 条 .pdf 右键命令会在 registerShellMenu() 启动期各触发多次注册表写入，
+  // 严重拖慢启动速度。经确认仅临时关闭右键菜单；App 内「PDF 工具箱」页(pdf.ts initPdf)保持可用。
+  // 恢复方法：取消下列注释即可（cleanupLegacy 中对 DISABLED_PDF_IDS 的清理可一并移回 SUB_COMMANDS）。
+  // { id: 'JianliApp.PdfCompress', name: 'PDF 压缩', action: 'pdf-compress', flag: '--pdf-compress', exts: ['.pdf'] },
+  // { id: 'JianliApp.PdfSplit', name: 'PDF 拆分', action: 'pdf-split', flag: '--pdf-split', exts: ['.pdf'] },
+  // { id: 'JianliApp.PdfMerge', name: 'PDF 合并', action: 'pdf-merge', flag: '--pdf-merge', exts: ['.pdf'] },
+  // { id: 'JianliApp.PdfExtractAttach', name: 'PDF 提取附件', action: 'pdf-extract-attach', flag: '--pdf-extract-attach', exts: ['.pdf'] },
+  // { id: 'JianliApp.PdfToImage', name: 'PDF 转图片', action: 'pdf-to-image', flag: '--pdf-to-image', exts: ['.pdf'] },
   { id: 'JianliApp.BatchRename', name: '批量重命名', action: 'batch-rename', flag: '--batch-rename', exts: ['*'] },
+];
+
+/** 2026-09-06 起禁用的 PDF 右键命令 id（仅注释未删除）：registerShellMenu 不再注册它们，
+ *  但 cleanupLegacy 仍需清理其在注册表的残留，否则已安装机器的右键菜单不会消失。恢复 PDF 右键时此数组可删。 */
+const DISABLED_PDF_IDS = [
+  'JianliApp.PdfCompress',
+  'JianliApp.PdfSplit',
+  'JianliApp.PdfMerge',
+  'JianliApp.PdfExtractAttach',
+  'JianliApp.PdfToImage',
 ];
 
 // ============ 注册表写入（execFile 避免 shell 引号转义问题） ============
@@ -259,6 +273,16 @@ function cleanupLegacy(): void {
         const leaf = `${parent}\\JianliApp.${s.id}`;
         try { regDeleteTree(leaf); } catch {}
       }
+    }
+  }
+  // 清理已禁用的 PDF 右键命令残留（它们已从 SUB_COMMANDS 注释掉，但注册表可能仍有旧键；
+  // 不清理则已安装机器的右键菜单不会消失）。恢复 PDF 右键时此块可删除。
+  for (const id of DISABLED_PDF_IDS) {
+    try { regDeleteTree(`${HKCU_ROOT}.${id}`); } catch {}
+    try { regDeleteTree(`${HKLM_COMMANDSTORE}\\${id}`); } catch {}
+    for (const parent of shellParentsFor('.pdf')) {
+      const leaf = `${parent}\\JianliApp.${id}`;
+      try { regDeleteTree(leaf); } catch {}
     }
   }
   const reader = SUB_COMMANDS.find((s) => s.action === 'open-reader');

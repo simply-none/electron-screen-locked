@@ -1,18 +1,101 @@
 <!--
-  发送面板（原子组件）：选文件 + 逐文件进度条 + 自动接收开关 + 打开接收目录。
+  发送面板（原子组件）：选文件 / 选文件夹（两个独立按钮，规避 Windows 单对话框无法同时选文件+文件夹的限制）+ 选择结果勾选列表（多次累加、默认全选）→ 逐文件进度 → 批次总进度 → 自动接收开关 + 打开接收目录。
   状态与动作全部经 useFileTransfer store（发送目标取自 store.selectedDeviceIp）。
+  注意：entries 是「文件/文件夹」混合的选择项，勾选后发送时由主进程递归拍平；files 是发送中由进度事件重建的拍平文件列表，仅用于进度条展示。
 -->
 <template>
   <div class="transfer-panel">
     <div class="transfer-panel__head">
       <el-button size="small" :disabled="store.sending" @click="store.pickFiles()">
-        <LucideIcon name="FolderOpen" :size="14" style="margin-right: 4px" />
+        <LucideIcon name="FileText" :size="14" style="margin-right: 4px" />
         选择文件
       </el-button>
-      <el-button size="small" text :disabled="!store.files.length" @click="store.clearFiles()">
+      <el-button size="small" :disabled="store.sending" @click="store.pickFolders()">
+        <LucideIcon name="FolderOpen" :size="14" style="margin-right: 4px" />
+        选择文件夹
+      </el-button>
+      <el-button
+        size="small"
+        text
+        :disabled="!store.entries.length || store.sending"
+        @click="store.clearEntries()"
+      >
         清空
       </el-button>
     </div>
+
+    <!-- 发送中：逐文件进度（files 由进度事件重建的拍平列表） -->
+    <template v-if="store.sending">
+      <ul v-if="store.files.length" class="transfer-panel__files">
+        <li v-for="(f, i) in store.files" :key="f.path" class="transfer-panel__file">
+          <div class="transfer-panel__file-meta">
+            <span class="transfer-panel__file-name">{{ f.name }}</span>
+            <span class="transfer-panel__file-size">{{ formatSize(f.size) }}</span>
+          </div>
+          <el-progress
+            v-if="progressOf(i)"
+            :percentage="percentOf(i)"
+            :status="progressStatus(i)"
+            :stroke-width="6"
+          />
+        </li>
+      </ul>
+      <div v-if="store.batchTotalBytes" class="transfer-panel__batch">
+        <el-progress :percentage="store.batchPercent" :stroke-width="8" />
+        <div class="transfer-panel__batch-meta">
+          <span>{{ formatSize(store.batchSentBytes) }} / {{ formatSize(store.batchTotalBytes) }}</span>
+          <span>{{ formatRate(store.batchRate) }}</span>
+          <span v-if="store.batchEta">剩余 {{ formatEta(store.batchEta) }}</span>
+        </div>
+      </div>
+    </template>
+
+    <!-- 空闲：选择结果勾选列表（文件夹作为单独一行；多次选择累加；默认全选） -->
+    <template v-else>
+      <div v-if="!store.entries.length" class="transfer-panel__empty">
+        还没选内容。点「选择文件」或「选择文件夹」可多次添加，文件与文件夹都支持，默认全部传送。
+      </div>
+      <div v-else class="transfer-panel__select">
+        <div class="transfer-panel__select-head">
+          <el-checkbox
+            :model-value="store.allChecked"
+            :indeterminate="store.someChecked"
+            @change="(v: string | number | boolean) => store.toggleAll(!!v)"
+          >
+            全选
+          </el-checkbox>
+          <span class="transfer-panel__select-summary">
+            已选 {{ store.entries.length }} 项 · 共 {{ store.totalFiles }} 个文件 ·
+            {{ formatSize(store.totalBytes) }}
+          </span>
+        </div>
+        <ul class="transfer-panel__entries">
+          <li v-for="e in store.entries" :key="e.path" class="transfer-panel__entry">
+            <el-checkbox
+              :model-value="e.checked"
+              @change="(v: string | number | boolean) => store.toggleEntry(e.path)"
+            />
+            <LucideIcon
+              :name="e.isDir ? 'Folder' : 'FileText'"
+              :size="15"
+              class="transfer-panel__entry-icon"
+            />
+            <span class="transfer-panel__entry-name" :title="e.path">{{ e.name }}</span>
+            <span class="transfer-panel__entry-meta">
+              {{ e.isDir ? `${e.fileCount} 个文件 · ` : "" }}{{ formatSize(e.size) }}
+            </span>
+            <el-button
+              size="small"
+              text
+              class="transfer-panel__entry-remove"
+              @click="store.removeEntry(e.path)"
+            >
+              <LucideIcon name="X" :size="14" />
+            </el-button>
+          </li>
+        </ul>
+      </div>
+    </template>
 
     <div class="transfer-panel__settings">
       <span class="transfer-panel__auto-label">自动接收</span>
@@ -33,34 +116,6 @@
         size="small"
         @change="(v: string | number | boolean) => store.setEnc(!!v)"
       />
-    </div>
-
-    <div v-if="!store.files.length" class="transfer-panel__empty">
-      还没选文件。选好后，在左侧设备点「发送」即可批量传过去。
-    </div>
-
-    <ul v-else class="transfer-panel__files">
-      <li v-for="(f, i) in store.files" :key="f.path" class="transfer-panel__file">
-        <div class="transfer-panel__file-meta">
-          <span class="transfer-panel__file-name">{{ f.name }}</span>
-          <span class="transfer-panel__file-size">{{ formatSize(f.size) }}</span>
-        </div>
-        <el-progress
-          v-if="progressOf(i)"
-          :percentage="percentOf(i)"
-          :status="progressStatus(i)"
-          :stroke-width="6"
-        />
-      </li>
-    </ul>
-
-    <div v-if="store.sending && store.batchTotalBytes" class="transfer-panel__batch">
-      <el-progress :percentage="store.batchPercent" :stroke-width="8" />
-      <div class="transfer-panel__batch-meta">
-        <span>{{ formatSize(store.batchSentBytes) }} / {{ formatSize(store.batchTotalBytes) }}</span>
-        <span>{{ formatRate(store.batchRate) }}</span>
-        <span v-if="store.batchEta">剩余 {{ formatEta(store.batchEta) }}</span>
-      </div>
     </div>
 
     <div class="transfer-panel__actions">
@@ -85,7 +140,7 @@ import type { TransferProgress } from "../types";
 const store = useFileTransfer();
 
 const canSend = computed(
-  () => !!store.selectedDeviceIp && store.files.length > 0 && !store.sending,
+  () => !!store.selectedDeviceIp && store.checkedCount > 0 && !store.sending,
 );
 
 function progressOf(i: number): TransferProgress | undefined {
@@ -180,6 +235,72 @@ function onCancel() {
     text-align: center;
     font-size: 12px;
     opacity: 0.55;
+  }
+
+  // 选择结果勾选列表
+  &__select {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__select-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  &__select-summary {
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  &__entries {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 240px;
+    overflow: auto;
+  }
+
+  &__entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 8px;
+
+    &:hover {
+      background: color-mix(in srgb, currentColor 6%, transparent);
+    }
+
+    &-icon {
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    &-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 12px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    &-meta {
+      flex-shrink: 0;
+      font-size: 11px;
+      opacity: 0.55;
+    }
+
+    &-remove {
+      flex-shrink: 0;
+    }
   }
 
   &__files {

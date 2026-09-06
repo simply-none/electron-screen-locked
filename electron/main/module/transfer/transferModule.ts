@@ -192,6 +192,34 @@ function recvPartPath(dir: string, name: string, size: number): string {
   return path.join(dir, `.recv-${safeName(name)}-${size}.part`);
 }
 
+/** 递归统计文件夹下的文件数与总字节数（用于选择列表展示；符号链接/无权限目录跳过） */
+function dirStats(dir: string): { fileCount: number; size: number } {
+  let fileCount = 0;
+  let size = 0;
+  try {
+    for (const c of fs.readdirSync(dir)) {
+      const cp = path.join(dir, c);
+      let st: fs.Stats;
+      try {
+        st = fs.statSync(cp);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        const r = dirStats(cp);
+        fileCount += r.fileCount;
+        size += r.size;
+      } else if (st.isFile()) {
+        fileCount += 1;
+        size += st.size;
+      }
+    }
+  } catch {
+    /* 无权限等异常：忽略该目录 */
+  }
+  return { fileCount, size };
+}
+
 // ---------------------------------------------------------------------------
 // 最近设备（#11）：持久化到 store，离线也能显示
 // ---------------------------------------------------------------------------
@@ -724,6 +752,35 @@ interface SendProgress {
  * 取消：transfer:cancel 会把 cancelFlags[tid] 置位并 abort 对应控制器；
  *   tid 只经进度事件传出（transfer:send 的 handle 要等整批结束才返回）。
  */
+/** 把「文件 + 文件夹混合路径」递归拍平为真实文件列表，并去重（按绝对路径）。文件夹本身不进入发送，只展开其内文件。 */
+function flattenSendPaths(paths: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const walk = (p: string) => {
+    let st: fs.Stats;
+    try {
+      st = fs.statSync(p);
+    } catch {
+      return;
+    }
+    if (st.isDirectory()) {
+      try {
+        for (const c of fs.readdirSync(p)) walk(path.join(p, c));
+      } catch {
+        /* 无权限目录跳过 */
+      }
+    } else if (st.isFile()) {
+      const norm = path.resolve(p);
+      if (!seen.has(norm)) {
+        seen.add(norm);
+        out.push(p);
+      }
+    }
+  };
+  for (const p of paths) walk(p);
+  return out;
+}
+
 async function sendBatch(
   peerIp: string,
   filePaths: string[],
@@ -736,7 +793,9 @@ async function sendBatch(
   tid: string;
   message: string;
 }> {
-  if (!filePaths.length) {
+  // 混合路径（文件+文件夹）→ 拍平成真实文件列表（去重；文件夹递归展开）
+  const flat = flattenSendPaths(filePaths);
+  if (!flat.length) {
     return { ok: false, okCount: 0, failCount: 0, canceled: false, tid: "", message: "未选择文件" };
   }
   // #17 并发守卫
@@ -750,7 +809,7 @@ async function sendBatch(
   cancelFlags.set(tid, false);
   const timer = setTimeout(
     () => ac.abort(new Error("timeout")),
-    Math.max(60_000, 60_000 * filePaths.length),
+    Math.max(60_000, 60_000 * flat.length),
   );
 
   // #14 加密协商：本端开启才生成会话密钥
@@ -761,7 +820,7 @@ async function sendBatch(
     encIv = crypto.randomBytes(16);
   }
 
-  const offerFiles = filePaths.map((fp, i) => ({
+  const offerFiles = flat.map((fp, i) => ({
     fid: String(i + 1),
     name: path.basename(fp),
     size: fs.statSync(fp).size,
@@ -814,12 +873,12 @@ async function sendBatch(
     let okCount = 0;
     let failCount = 0;
     let canceled = false;
-    for (let i = 0; i < filePaths.length; i++) {
+    for (let i = 0; i < flat.length; i++) {
       if (cancelFlags.get(tid)) {
         canceled = true;
         break;
       }
-      const fp = filePaths[i];
+      const fp = flat[i];
       const fid = String(i + 1);
       const meta = offerFiles[i];
       const startOffset = resumeMap.get(fid) ?? 0;
@@ -925,7 +984,7 @@ async function sendBatch(
     return {
       ok: false,
       okCount: 0,
-      failCount: filePaths.length,
+      failCount: flat.length,
       canceled: cancelFlags.get(tid) === true,
       tid,
       message: `发送失败：${e}`,
@@ -993,24 +1052,53 @@ export function initTransfer(): void {
       return { success: true };
     });
 
+    /**
+     * 把系统对话框返回的绝对路径数组转成选择项（文件夹递归统计子文件数与总大小）。
+     * 注意：Windows 原生对话框无法在同一对话框内同时选文件与文件夹——
+     * 只要带 openDirectory，对话框就强制进入「仅文件夹」模式，openFile 被静默忽略。
+     * 故拆成 transfer:pick-files / transfer:pick-folders 两个独立对话框，两者返回结构一致。
+     */
+    function toPickEntries(result: string[] | undefined) {
+      if (!result || !result.length) return [];
+      return result.map((p) => {
+        let isDir = false;
+        let size = 0;
+        let fileCount = 1;
+        try {
+          const st = fs.statSync(p);
+          isDir = st.isDirectory();
+          if (isDir) {
+            const s = dirStats(p);
+            fileCount = s.fileCount;
+            size = s.size;
+          } else {
+            size = st.size;
+          }
+        } catch {
+          /* 无权限等异常：以文件形态兜底 */
+        }
+        return { path: p, name: path.basename(p), isDir, size, fileCount };
+      });
+    }
+
+    // #10 选文件：只选文件（可多选）。文件夹请用下面的 transfer:pick-folders。
     ipcMain.handle("transfer:pick-files", () => {
       const w = win || undefined;
       const result = dialog.showOpenDialogSync(w as any, {
         title: "选择要发送的文件",
-        properties: ["openFile", "multiSelections", "openDirectory"],
+        properties: ["openFile", "multiSelections"],
       });
-      // #10 文件夹：展开为文件列表（递归），文件夹本身不传
-      const files: string[] = [];
-      const walk = (p: string) => {
-        const st = fs.statSync(p);
-        if (st.isDirectory()) {
-          for (const c of fs.readdirSync(p)) walk(path.join(p, c));
-        } else if (st.isFile()) {
-          files.push(p);
-        }
-      };
-      for (const r of result || []) walk(r);
-      return { success: true, data: files };
+      return { success: true, data: toPickEntries(result) };
+    });
+
+    // #10 选文件夹：只选文件夹（可多选）。文件请用上面的 transfer:pick-files。
+    ipcMain.handle("transfer:pick-folders", () => {
+      const w = win || undefined;
+      const result = dialog.showOpenDialogSync(w as any, {
+        title: "选择要发送的文件夹",
+        properties: ["openDirectory", "multiSelections"],
+      });
+      return { success: true, data: toPickEntries(result) };
     });
 
     ipcMain.handle("transfer:set-auto-accept", (_e, args: { value: boolean }) => {

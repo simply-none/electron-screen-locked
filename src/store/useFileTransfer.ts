@@ -16,6 +16,7 @@ import type {
   TransferStatus,
   LocalFileItem,
   RecentPeer,
+  SelectedEntry,
 } from "@/views/fileTransfer/types";
 
 export const useFileTransfer = defineStore("fileTransfer", () => {
@@ -27,8 +28,10 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
   const recentPeers = ref<RecentPeer[]>([]);
   /** 当前选中设备 ip（发送目标） */
   const selectedDeviceIp = ref("");
-  /** 本地已选待发文件 */
+  /** 本地已选待发文件（发送中由 progress 事件重建，供进度条展示） */
   const files = ref<LocalFileItem[]>([]);
+  /** 选择结果（文件/文件夹，可多次累加、可单独勾选，默认全选） */
+  const entries = ref<SelectedEntry[]>([]);
   /** 当前批次逐文件进度，key = `${tid}|${fid}` */
   const progress = ref<Record<string, TransferProgress>>({});
   /** 当前批次号 */
@@ -73,6 +76,27 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     const remain = batchTotalBytes.value - batchSentBytes.value;
     return remain > 0 ? Math.ceil(remain / rate) : 0;
   });
+
+  /** 已勾选的待发项（发送时只发这些） */
+  const checkedEntries = computed(() => entries.value.filter((e) => e.checked));
+  /** 已勾选项数 */
+  const checkedCount = computed(() => checkedEntries.value.length);
+  /** 已勾选包含的（拍平后）文件总数 */
+  const totalFiles = computed(() =>
+    checkedEntries.value.reduce((s, e) => s + (e.fileCount || 0), 0),
+  );
+  /** 已勾选总字节数 */
+  const totalBytes = computed(() =>
+    checkedEntries.value.reduce((s, e) => s + (e.size || 0), 0),
+  );
+  /** 是否全部勾选（「全选」勾选框状态） */
+  const allChecked = computed(
+    () => entries.value.length > 0 && entries.value.every((e) => e.checked),
+  );
+  /** 是否部分勾选（半选态） */
+  const someChecked = computed(
+    () => checkedCount.value > 0 && !allChecked.value,
+  );
 
   /** 本机服务状态 */
   async function loadStatus() {
@@ -127,25 +151,59 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     if (!selectedDeviceIp.value) selectedDeviceIp.value = clean;
   }
 
-  /** 打开系统文件多选对话框，结果写入 files */
+  /** 打开系统文件/文件夹多选对话框，结果【累加】到 entries（按 path 去重，默认勾选） */
+  /** 把主进程返回的选择项累加到 entries（按 path 去重、默认 checked=true） */
+  function addPicked(res: { success?: boolean; data?: SelectedEntry[] } | undefined) {
+    if (!res || !res.success || !res.data || !res.data.length) return;
+    const existing = new Set(entries.value.map((e) => e.path));
+    const added: SelectedEntry[] = [];
+    for (const e of res.data) {
+      if (existing.has(e.path)) continue;
+      existing.add(e.path);
+      added.push({ ...e, checked: true });
+    }
+    if (added.length) entries.value = [...entries.value, ...added];
+  }
+
+  /** 打开系统「选文件」对话框，结果累加进 entries（文件可多选） */
   async function pickFiles() {
     try {
       const res = await fileTransferApi.pickFiles();
-      if (res.success && res.data && res.data.length) {
-        files.value = res.data.map((p: string) => ({
-          path: p,
-          name: p.split(/[\\/]/).pop() || p,
-          size: 0, // 真实大小由主进程发送时回传，这里未知
-        }));
-      }
+      addPicked(res);
     } catch (e) {
-      console.warn("[fileTransfer] pick failed:", e);
+      console.warn("[fileTransfer] pick files failed:", e);
     }
   }
 
-  /** 清空已选文件 */
-  function clearFiles() {
-    files.value = [];
+  /** 打开系统「选文件夹」对话框，结果累加进 entries（文件夹作为单独一行，发送时由主进程递归拍平） */
+  async function pickFolders() {
+    try {
+      const res = await fileTransferApi.pickFolders();
+      addPicked(res);
+    } catch (e) {
+      console.warn("[fileTransfer] pick folders failed:", e);
+    }
+  }
+
+  /** 切换单条勾选（默认全选；可单独取消某条） */
+  function toggleEntry(path: string) {
+    const e = entries.value.find((x) => x.path === path);
+    if (e) e.checked = !e.checked;
+  }
+
+  /** 全选 / 取消全选 */
+  function toggleAll(checked: boolean) {
+    entries.value.forEach((e) => (e.checked = checked));
+  }
+
+  /** 移除单条选择项 */
+  function removeEntry(path: string) {
+    entries.value = entries.value.filter((e) => e.path !== path);
+  }
+
+  /** 清空选择列表 */
+  function clearEntries() {
+    entries.value = [];
   }
 
   /** 切换自动接收开关（同时持久化到主进程） */
@@ -200,16 +258,18 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     }
   }
 
-  /** 批量发送到指定对端 */
+  /** 批量发送到指定对端（只发已勾选的 entries；文件夹原样传出，由主进程递归拍平） */
   async function send(peerIp: string) {
-    if (!peerIp || !files.value.length) return;
+    const checked = entries.value.filter((e) => e.checked);
+    if (!peerIp || !checked.length) return;
     sending.value = true;
     progress.value = {};
+    files.value = []; // 发送中由 progress 事件重建拍平列表
     batchStart.value = Date.now();
     try {
       const res = await fileTransferApi.send(
         peerIp,
-        files.value.map((f) => f.path),
+        checked.map((e) => e.path),
       );
       if (res.success && res.data) {
         // 整批结束后才能拿到 tid；发送过程中靠 progress 事件设置（见 onProgress）
@@ -223,7 +283,10 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
       sending.value = false;
       // 保留最终进度态 1.5s，让用户看到完成/失败，再清空
       setTimeout(() => {
-        if (!sending.value) progress.value = {};
+        if (!sending.value) {
+          progress.value = {};
+          files.value = [];
+        }
       }, 1500);
     }
   }
@@ -297,6 +360,11 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     if (history.value.length && history.value[0].tid !== p.tid) history.value = [];
     currentTid.value = p.tid;
     progress.value = { ...progress.value, [`${p.tid}|${p.fid}`]: p };
+    // 由进度事件重建拍平文件列表（顺序 = fid 顺序），供逐文件进度条展示
+    files.value = Object.values(progress.value)
+      .filter((x) => x.tid === p.tid)
+      .sort((a, b) => Number(a.fid) - Number(b.fid))
+      .map((x) => ({ path: x.name, name: x.name, size: x.total }));
   }
   function onReceived(_e: unknown, _payload: { name: string; path: string; size: number; from: string }) {
     loadHistory();
@@ -335,6 +403,12 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     recentPeers,
     selectedDeviceIp,
     files,
+    entries,
+    checkedCount,
+    totalFiles,
+    totalBytes,
+    allChecked,
+    someChecked,
     progress,
     currentTid,
     history,
@@ -355,7 +429,11 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     loadRecent,
     addManual,
     pickFiles,
-    clearFiles,
+    pickFolders,
+    toggleEntry,
+    toggleAll,
+    removeEntry,
+    clearEntries,
     setAutoAccept,
     setRename,
     setEnc,

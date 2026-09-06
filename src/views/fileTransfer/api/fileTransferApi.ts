@@ -4,7 +4,9 @@
  * 通道清单（主进程 electron/main/module/transfer/transferModule.ts 注册）：
  * - transfer:status         → 本机信息 / 接收目录 / 自动接收开关
  * - transfer:scan           → 复用 sync 的 UDP 广播扫描
- * - transfer:pick-files     → 系统文件多选对话框
+ * - transfer:pick-files     → 系统「选文件」对话框（仅文件，可多选）
+ * - transfer:pick-folders   → 系统「选文件夹」对话框（仅文件夹，可多选）
+ *   （Windows 原生对话框无法同时选文件+文件夹，故拆成两个；二者返回结构一致）
  * - transfer:send           → {peerIp, filePaths[]} 触发批量发送（流式 + 进度事件）
  * - transfer:cancel         → {tid} 取消正在发送的批次（中止流式上传，记 canceled）
  * - transfer:history        → 历史记录（created_at 倒序）
@@ -20,6 +22,7 @@ import type {
   TransferHistoryItem,
   TransferSendResult,
   RecentPeer,
+  SelectedEntry,
 } from "../types";
 
 interface IpcResult<T = unknown> {
@@ -40,8 +43,11 @@ export const fileTransferApi = {
   /** 扫描局域网对端（复用 sync 发现） */
   scan: () => invoke<TransferPeerDevice[]>("transfer:scan"),
 
-  /** 系统文件多选对话框 → 返回绝对路径数组 */
-  pickFiles: () => invoke<string[]>("transfer:pick-files"),
+  /** 系统「选文件」对话框（仅文件，可多选）→ 返回原始选择项 */
+  pickFiles: () => invoke<SelectedEntry[]>("transfer:pick-files"),
+
+  /** 系统「选文件夹」对话框（仅文件夹，可多选）→ 返回原始选择项 */
+  pickFolders: () => invoke<SelectedEntry[]>("transfer:pick-folders"),
 
   /** 批量发送：触发后主进程经 file-transfer:progress/received/batch-done 推事件 */
   send: (peerIp: string, filePaths: string[]) =>

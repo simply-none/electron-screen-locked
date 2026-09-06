@@ -31,6 +31,22 @@ export interface LocalFileItem {
   size: number;
 }
 
+/** 选择列表里的「待发项」：可以是文件，也可以是文件夹（文件夹不在此拍平，发送时由主进程递归展开）。 */
+export interface SelectedEntry {
+  /** 绝对路径（文件或文件夹） */
+  path: string;
+  /** 显示名（basename） */
+  name: string;
+  /** 是否为文件夹 */
+  isDir: boolean;
+  /** 文件：自身字节数；文件夹：递归统计的子文件总字节数 */
+  size: number;
+  /** 文件：1；文件夹：递归统计的子文件数 */
+  fileCount: number;
+  /** 是否在本次传送中勾选（默认 true = 全选传送） */
+  checked: boolean;
+}
+
 /** 文件互传历史记录（与 file_transfer 表逐列对齐） */
 export interface TransferHistoryItem {
   key: string;

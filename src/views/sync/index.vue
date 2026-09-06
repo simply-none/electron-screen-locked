@@ -37,7 +37,7 @@
         <el-input
           v-model="manualIp"
           size="small"
-          placeholder="手动填 IP（模拟器填 10.0.2.2）"
+          placeholder="手动填 IP[:端口]（模拟器：adb forward 后填 127.0.0.1:47125）"
           @keyup.enter="addManual"
         />
         <el-button size="small" @click="addManual">添加</el-button>
