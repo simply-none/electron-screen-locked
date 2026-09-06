@@ -72,6 +72,7 @@ export const RouteNames = {
   PASSWORD_VAULT: "passwordVault",
   FILE_VAULT: "fileVault",
   FILE_TRANSFER: "fileTransfer",
+  FERRY: "ferry",
 } as const;
 
 export type RouteNameType = typeof RouteNames[keyof typeof RouteNames];
@@ -437,6 +438,14 @@ export const layoutRouters: RouteRecordRaw[] = [
     component: () => import("@/views/fileTransfer/index.vue"),
     meta: {
       title: "文件互传",
+    },
+  },
+  {
+    path: "/ferry",
+    name: RouteNames.FERRY,
+    component: () => import("@/views/ferry/index.vue"),
+    meta: {
+      title: "隔空互传",
     },
   },
 ];

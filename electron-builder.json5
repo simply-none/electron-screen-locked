@@ -11,6 +11,12 @@
     "dist",
     "dist-electron"
   ],
+  "extraResources": [
+    {
+      "from": "electron/resources/qyferry",
+      "to": "qyferry"
+    }
+  ],
   "afterPack": "build/afterPack.cjs",
   "mac": {
     "target": [

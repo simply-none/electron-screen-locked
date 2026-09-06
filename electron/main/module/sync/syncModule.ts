@@ -21,6 +21,7 @@ import os from "node:os";
 import { ipcMain } from "electron";
 import { store } from "../store.ts";
 import { upsert, query } from "../newSql.ts";
+import { currentNickname } from "../transfer/transferModule.ts";
 
 const DISCOVERY_PORT = 47123;
 const DATA_PORT = 47124;
@@ -108,7 +109,7 @@ export function registerDataRoute(
 
 function deviceInfo() {
   return {
-    name: os.hostname(),
+    name: currentNickname(),
     id: deviceId(),
     platform: `win32-electron`,
   };

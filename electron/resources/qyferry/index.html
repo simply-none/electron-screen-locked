@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f3f0e8" />
+    <meta
+      name="description"
+      content="Private, loss-tolerant file transfer between devices using animated QR codes. Nothing is uploaded to a server."
+    />
+    <meta property="og:title" content="QRFerry · Files through the camera" />
+    <meta
+      property="og:description"
+      content="Send files screen-to-camera with fountain-coded QR streams. Fully client-side."
+    />
+    <meta property="og:type" content="website" />
+    <title>QRFerry · Files through the camera</title>
+    <script type="module" crossorigin src="/assets/index-BrnYHl0U.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-Bx7tdtu-.css">
+  </head>
+  <body>
+    <div id="root"></div>
+    <style>
+      /* 渐离App · 隔空互传 使用提示（≤10MB） */
+      #jianli-ferry-note {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 2147483647;
+        background: #fff7e6; color: #8a6d3b;
+        font: 13px/1.5 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+        padding: 6px 12px; text-align: center; border-top: 1px solid #f0d9a8;
+        box-shadow: 0 -2px 8px rgba(0, 0, 0, .06);
+      }
+      #root { padding-bottom: 34px; }
+    </style>
+    <div id="jianli-ferry-note">
+      ⚠️ 隔空互传基于屏幕二维码直传，仅适合 ≤10MB 的小文件（文档 / 图片 / 短文本），大文件会很慢。
+    </div>
+  </body>
+</html>

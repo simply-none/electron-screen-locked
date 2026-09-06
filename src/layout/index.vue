@@ -133,7 +133,7 @@ interface MenuGroup {
 
 const groupDefs: MenuGroup[] = [
   { label: '通用', names: ['setting', 'newTips', 'homeMode', 'windowMode'] },
-  { label: '系统与资源', names: ['systemInfo', 'routeSetting', 'appCache', 'backup', 'fileRela', 'resourceManage', 'safetyProtection', 'sync', 'fileTransfer'] },
+  { label: '系统与资源', names: ['systemInfo', 'routeSetting', 'appCache', 'backup', 'fileRela', 'resourceManage', 'safetyProtection', 'sync', 'fileTransfer', 'ferry'] },
   { label: '效率工具', names: ['pomodoroRecord', 'clipboard', 'notebookApp', 'categorizableNotes', 'themeConversation', 'todoList', 'habit', 'countdown', 'accounting', 'stock', 'earning', 'resume', 'registerShortcut', 'function', 'weather', 'browser', 'ebookReader', 'screenshot', 'downloader', 'colorPalette', 'qrCode', 'twoFactor', 'passwordVault', 'pdfTools', 'fileVault'] },
   { label: '开发工具', names: ['netRequest', 'highPerfSql', 'flow', 'ttsTest', 'dataAcquisition', 'devToolbox'] },
   { label: '关于', names: ['about'] },
