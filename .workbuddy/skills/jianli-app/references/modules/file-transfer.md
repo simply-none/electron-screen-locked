@@ -35,12 +35,12 @@ PC（Electron）⇆ 移动端（Flutter）在同一局域网内**批量互传文
 - **#9 重名策略**：`store._transfer_rename`（`'rename'` 默认 / `'overwrite'`）；`transfer:set-rename` 切换并持久化。
 - **#10 文件夹 / 拖拽**：`transfer:pick-files` 支持选目录（`dialog.showOpenDialog` `properties:['openDirectory','multiSelections']`）递归 `walk` 展开为文件列表；渲染端支持拖拽文件夹。
 - **#11 最近设备**：扫描/发送过的对端写入 `store._transfer_recent`（`RecentPeer{ip,name,id,platform,lastSeen}`）；`transfer:recent-peers` 读取、`transfer:forget-peer` 剔除；离线可见、点「发到此处」重发。
-- **#13 断点续传**：offer 响应 `accepted` 每项带 `resumeFrom`（按 `recv-${safeName}-${size}.part` 稳定名查已有字节数）；`postBinary` 带 `startOffset`，data 带 `?from=resumeFrom`，Content-Length = `size - startOffset`，接收端 append + 用已有字节给 hash 播种。**加密批次不做续传**（CTR keystream 不可任意字节对齐）。
+- **#13 断点续传**：offer 响应 `accepted` 每项带 `resumeFrom`（按 `recv-${safeName}-${size}.part` 稳定名查已有字节数）；`postBinary` 带 `startOffset`，data 带 `?from=resumeFrom`，Content-Length = `size - startOffset`，接收端 append + 用已有字节给 hash 播种；发送端续传时先把 `[0, startOffset)` 前缀补进 hash，`/file/end` 携带**全文件 hash**（与移动端发送端 `sha256.bind(file.openRead())` 全文件语义一致。2026-09-06 修复：原 PC 实现只对剩余字节算 hash，与接收端播种语义不一致，续传必误报 hash mismatch 且文件被误删）。**加密批次不做续传**（CTR keystream 不可任意字节对齐）。
 - **#14 会话加密（默认关）**：开启且 `encEnabled()` 时生成 `randomBytes(32)` key + `randomBytes(16)` iv，offer 带 `enc:{key,iv}` base64；对端确认后 `offer` 响应 `enc:true`，data 先 `tee` 算明文 hash 再 `createCipheriv('aes-256-ctr',key,iv)` 加密，Content-Length = `size - startOffset`。**需收发双端均开启**。
 - **#15 接收询问模式**：`autoAccept=false` 时不立即拒（`403 rejected`），改经 `pendingAsk` + 事件 `file-transfer:incoming-ask` 弹确认框，等 UI 答复（`transfer:answer-offer {tid, accept}`）；`ASK_TIMEOUT_MS=60_000` 超时默认拒。
 - **#16 磁盘预估**：`handleOffer` 先 `freeSpaceBytes(dir)`（node `fs.statfsSync`）比对 `total`，不足回 `507 no space` 拒绝。**移动端无可靠 free-space API，仅软预估不硬拒**。
 - **#17 并发守卫**：同刻仅一个接收批次（`activeReceiveTid`）与一个发送批次（`activeSendTid`）；冲突回 `429 busy`。
-- **#20 历史分页 + 自动清理**：`transfer:history` 支持 `{limit,offset}` 返 `{data,total}`；`handleEnd` 后 `trimHistory()` 超 `MAX_HISTORY_ROWS=1000` 删最旧。移动端 `TransferRepository.list/trim(1000)` 同语义。
+- **#20 历史分页 + 自动清理**：`transfer:history` 支持 `{limit,offset}` 返 `{data,total}`；`handleEnd` 后 `trimHistory()` 超 `MAX_HISTORY_ROWS=1000` 删最旧。移动端 `TransferRepository.list/trim(1000)` 同语义。**UI 记录区只显示当次批次**（2026-09-06 四批，机制见特有坑；DB 仍全量写入）。
 
 ## 设备发现（含手机热点场景，2026-09-06 补齐）
 `scanPeers()`（syncModule.ts）向**多个目标各发一份** UDP 发现包，目标由 `discoveryTargets()` 计算：
@@ -72,12 +72,13 @@ PC（Electron）⇆ 移动端（Flutter）在同一局域网内**批量互传文
 - 落地：路由 `/fileTransfer`（RouteNames.FILE_TRANSFER）；侧边栏「系统与资源」组；routeSetting 可见开关；iconMap `fileTransfer:'ArrowLeftRight'`
 
 ## 移动端对应实现
-- `jianli-mobile-app/lib/features/file_transfer/`（models / repositories / providers / services / components / page）：与桌面端同协议同历史表；接收目录 `Documents/渐离App文件互传/`；详见其技能 `references/file-transfer-plan.md`（已转为决策记录）。
+- `jianli-mobile-app/lib/features/file_transfer/`（models / repositories / providers / services / components / page）：与桌面端同协议同历史表；接收目录 系统 `Download/渐离App文件互传/`（Android 需存储权限「所有文件访问」，入页申请；未授权/创建失败回退沙盒 `Documents/渐离App文件互传/`，iOS 恒走沙盒回退）；详见其技能 `references/file-transfer-plan.md`（已转为决策记录）。
 
 ## 用到的 IPC 通道
 `transfer:status` / `transfer:scan` / `transfer:pick-files` / `transfer:send` / `transfer:cancel` / `transfer:history` / `transfer:open-received` / `transfer:open-file` / `transfer:open-folder` / `transfer:set-auto-accept` / `transfer:set-rename` / `transfer:set-enc` / `transfer:recent-peers` / `transfer:forget-peer` / `transfer:answer-offer`（渲染→主，`ipcMain.handle`）；事件 `file-transfer:progress` / `file-transfer:received` / `file-transfer:batch-done` / `file-transfer:incoming-ask`（主→渲染，preload `on` 透传）。
 
 ## 特有坑 / 注意
+- **流式发送双坑（2026-09-06 修复）**：`postBinary` 的 fetch 上传链路有两处一修必踩的坑：(1) `Readable` 必须**值导入**（`import { Transform, Readable } from "node:stream"`）——写成 `type Readable` 会被 TS 在编译期擦除，运行时 `Readable.toWeb(nodeStream)` 抛 `ReferenceError: Readable is not defined`，每个文件在 data 阶段即失败、历史记 `send failed: ...`；(2) Node 22 / Electron 36 的 undici `fetch` 用 ReadableStream 作 body 必须带 **`duplex: "half"`**，否则抛 `RequestInit: duplex option is required when sending a body.`（DOM lib 的 RequestInit 无此字段，需局部 `RequestInit & { duplex?: "half" }` 标注）。手动 `Content-Length` 与流 body 组合已实测可用（续传/加密路径依赖它）。
 - **改 transferModule.ts / syncModule.ts 必须重启 Electron**（数据面 HTTP 服务与 IPC 在主进程）。
 - 接收端 `.part` 临时文件在 `receiveDir()` 内（`<fileCachePath>/文件互传/`），正常流程 `handleEnd` 改名；异常残留由 `sweepStale()` 定时（10min）清理，无需手动。
 - 发送端历史 `peer_name` 经 offer 响应 `me` 回填，不再空白（对端未回传时回退 `peer_ip`）。
@@ -90,3 +91,4 @@ PC（Electron）⇆ 移动端（Flutter）在同一局域网内**批量互传文
 - **最近设备（2026-09-06 二批，#11）**：扫描/发送成功后写入 `store._transfer_recent`（最多 20 条，`lastSeen` 为 epoch ms）；`transfer:recent-peers` 返回列表、`transfer:forget-peer {ip}` 剔除；页面「最近设备」区离线也展示，点「发到此处」用记忆的 ip 重发。与移动端 `RecentPeers`（shared_preferences 键 `transfer_recent_peers`）同构。
 - **磁盘预估（2026-09-06 二批，#16）**：`handleOffer` 先 `freeSpaceBytes(dir)`（`fs.statfsSync(dir).bsize * blocks`）比对本批 `total`，不足回 `507 no space` 拒绝。移动端无可靠 free-space API，仅软预估不硬拒。
 - **历史分页 + 自动清理（2026-09-06 二批，#20）**：`transfer:history` 支持 `{limit,offset}`，缺省全量、返 `{data,total}`；`handleEnd` 后 `trimHistory()` 超 `MAX_HISTORY_ROWS=1000` 删最旧 excess 行。前端「加载更多」按钮递增 offset。
+- **记录区只显示当次批次（2026-09-06 四批）**：PC `useFileTransfer.loadHistory()` 拉全量后**只保留 created_at 最新的那条所属 tid 的行**；`onProgress` 收到新 tid 先清空旧展示；页面启动**不调** `loadHistory()`（记录区为空，由 progress（批次结束）/ received / batch-done 事件驱动刷新；「刷新」按钮手动拉最新批次）。移动端 `TransferServer.batchTidStream`（offer 登记时推 tid）+ 发送首条进度切 `_batchTid`，页面按 `_batchTid` 过滤 `watchAll` 流，移除「加载更多」分页。**DB 写入与 trim(1000) 照旧，只是 UI 不展示其他记录**。

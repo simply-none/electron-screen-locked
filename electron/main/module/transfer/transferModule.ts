@@ -33,7 +33,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import crypto from "node:crypto";
-import { Transform, type Readable } from "node:stream";
+import { Transform, Readable } from "node:stream";
 import { app, dialog, ipcMain, shell } from "electron";
 import { store } from "../store.ts";
 import { query, upsert, ensureTableExists, del, count } from "../newSql.ts";
@@ -651,6 +651,16 @@ async function postBinary(
   const hash = crypto.createHash("sha256");
   let sent = startOffset;
   let lastEmit = 0;
+  // #13 续传：接收端会给已有 .part 播种，其最终 hash = 全文件；
+  // 发送端因此先把 [0, startOffset) 前缀补进 hash，使 end 携带的也是全文件 hash
+  if (startOffset > 0) {
+    await new Promise<void>((resolve, reject) => {
+      fs.createReadStream(filePath, { end: startOffset - 1 })
+        .on("data", (c: Buffer) => hash.update(c))
+        .on("end", () => resolve())
+        .on("error", reject);
+    });
+  }
   // 明文先过 tee（算 hash + 透传），encrypt 在 tee 之后
   const tee = new Transform({
     transform(chunk: Buffer, _enc, cb) {
@@ -683,12 +693,17 @@ async function postBinary(
   const nodeStream = head.pipe(counter) as Readable;
   const webStream = Readable.toWeb(nodeStream);
   // CTR 是流密码，密文长度 = 明文长度，故 Content-Length = 剩余字节数
-  await fetch(peerUrl(peerIp, p), {
+  // undici 要求：body 为 ReadableStream 时必须声明 duplex，否则抛
+  // "RequestInit: duplex option is required when sending a body."
+  // （DOM lib 的 RequestInit 无 duplex 字段，故局部交叉类型标注）
+  const init: RequestInit & { duplex?: "half" } = {
     method: "POST",
     headers: { "Content-Length": String(stat.size - startOffset) },
+    duplex: "half",
     body: webStream as unknown as BodyInit,
     signal,
-  });
+  };
+  await fetch(peerUrl(peerIp, p), init);
   return hash.digest("hex");
 }
 

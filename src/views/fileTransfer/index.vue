@@ -70,10 +70,10 @@
       <TransferPanel />
     </section>
 
-    <!-- 传输记录 -->
+    <!-- 传输记录（只显示当次批次，其他历史暂不展示） -->
     <section class="file-transfer-page__card">
       <div class="file-transfer-page__card-head">
-        <span>传输记录</span>
+        <span>传输记录（当次）</span>
         <el-button size="small" text @click="store.loadHistory()">刷新</el-button>
       </div>
       <TransferLog :history="store.history" />
@@ -117,7 +117,7 @@ onMounted(() => {
   store.loadStatus();
   store.scan();
   store.loadRecent();
-  store.loadHistory();
+  // 传输记录只显示当次批次，启动时不拉历史（由 progress/received/batch-done 事件驱动刷新）
   store.bindEvents();
 });
 

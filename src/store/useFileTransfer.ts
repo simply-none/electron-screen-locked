@@ -243,11 +243,22 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     }
   }
 
-  /** 拉取历史记录 */
+  /**
+   * 拉取「当次传输」记录：只保留 created_at 最新的那条记录所属批次（tid），
+   * 其余历史记录暂不展示（DB 仍全量写入，主进程侧不删）。
+   */
   async function loadHistory() {
     try {
       const res = await fileTransferApi.history();
-      if (res.success && res.data) history.value = res.data;
+      if (res.success && res.data) {
+        const rows = res.data as TransferHistoryItem[];
+        if (!rows.length) {
+          history.value = [];
+          return;
+        }
+        const latest = rows.reduce((a, b) => (b.created_at > a.created_at ? b : a));
+        history.value = rows.filter((r) => r.tid === latest.tid);
+      }
     } catch (e) {
       console.warn("[fileTransfer] history failed:", e);
     }
@@ -282,6 +293,8 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
 
   // ---- 事件订阅（主进程 → 渲染端，仅 file-transfer: 前缀）----
   function onProgress(_e: unknown, p: TransferProgress) {
+    // 新批次开始：清掉上一批的展示记录，记录区只显示当次传输
+    if (history.value.length && history.value[0].tid !== p.tid) history.value = [];
     currentTid.value = p.tid;
     progress.value = { ...progress.value, [`${p.tid}|${p.fid}`]: p };
   }
