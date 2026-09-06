@@ -43,6 +43,7 @@ agent_created: true
 - 主题与视觉约定（token 清单 / 严禁硬编码 / 禁用未全覆盖的 --el-* / 派生色用 color-mix）：`references/theme.md`
 - 已知差异与风险：`references/risks.md`
 - Flutter 移动端移植计划（跨端 / 双端同步）：`references/flutter-port.md`
+- 文件互传双端方案与任务清单（**待用户确认后实施**，完成后转正为模块文档）：`references/file-transfer-plan.md`
 - 逐模块文档（`references/modules/`，处理具体模块前先读对应文件）：
   - **效率 / 提醒类**：`habit` `reminder` `todo` `pomodoro` `countdown` `command-palette` `theme-conversation` `window-mode` `shortcut` `home-mode` `route-setting` `settings` `quick-note` `sticker` `app-lock` `two-factor` `file-vault`
   - **内容 / 数据类**：`clipboard` `notebook` `categorizable-notes` `ebook-reader` `accounting` `stock` `flow` `function` `color-palette` `resume`
@@ -56,5 +57,6 @@ agent_created: true
 
 ## 维护说明
 - 本 skill 是「项目知识基线」，随代码演进而更新。每次大改动后同步 `risks.md` 与对应模块文档。
+- 2026-09-06：新增双端「文件互传」需求（批量收发、双端对称）。双端方案与任务清单已产出**待确认**：`references/file-transfer-plan.md`（复用 47123/47124 设施扩展 /file/* 端点、新增 transfer 主进程模块与 fileTransfer 页面、双端同构 file_transfer 历史表）。确认后按清单实施并回写模块文档。
 - 2026-09-05：**局域网同步白名单扩容（移动端主题对话对齐）**——`syncModule.ts` 与 `src/store/useSync.ts` 加入主题对话三表 `conversation_theme` / `conversation` / `conversation_tag`（INTEGER 自增 id 主键）；新增 `tablePk()` 按表适配主键（conversation* → `id`，其余 → `key`），upsert 走 `ON CONFLICT(pk) DO UPDATE`。详见 `references/modules/sync.md` 白名单小节；**改完需重启 Electron**。
 - 新增模块时：在 `references/modules/` 加一份文档，并在上方「逐模块文档」导航里补一行。
