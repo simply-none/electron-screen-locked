@@ -314,7 +314,8 @@ export const useFileTransfer = defineStore("fileTransfer", () => {
     try {
       const res = await fileTransferApi.history();
       if (res.success && res.data) {
-        const rows = res.data as TransferHistoryItem[];
+        // const rows = res.data as TransferHistoryItem[];
+        const rows = res.data as unknown as TransferHistoryItem[];
         if (!rows.length) {
           history.value = [];
           return;
