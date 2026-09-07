@@ -20,6 +20,7 @@ import http from "node:http";
 import os from "node:os";
 import { ipcMain } from "electron";
 import { store } from "../store.ts";
+import { win } from "../mainWindow.ts";
 import { upsert, query } from "../newSql.ts";
 import { currentNickname } from "../transfer/transferModule.ts";
 
@@ -27,6 +28,8 @@ const DISCOVERY_PORT = 47123;
 const DATA_PORT = 47124;
 const DISCOVER_PACKET = "JIANLI_SYNC_DISCOVER_V1";
 const INFO_PREFIX = "JIANLI_SYNC_INFO_V1|";
+/** 被动端同步日志上报通道（主进程 → 渲染进程，useSync 监听并入日志列表） */
+const LOG_CHANNEL = "sync:log";
 
 /** 局域网对端设备（与移动端 PeerDevice 同构） */
 export interface SyncPeer {
@@ -164,9 +167,18 @@ function startDataServer(): http.Server {
       }
       try {
         const rows = (await query({ tableName: table })) as Record<string, unknown>[];
+        // 被动端：对端来拉，动作是「拉取」——与对端主动拉取那条日志字面相同
+        win?.webContents.send(LOG_CHANNEL, {
+          msg: `拉取 ${table}：${rows.length} 行`,
+          level: "ok",
+        });
         res.end(JSON.stringify({ ok: true, table, rows }));
         console.log(`[sync] exported table=${table} rows=${rows.length}`);
       } catch (e) {
+        win?.webContents.send(LOG_CHANNEL, {
+          msg: `拉取 ${table} 失败：${String(e)}`,
+          level: "error",
+        });
         res.statusCode = 500;
         res.end(JSON.stringify({ ok: false, error: String(e) }));
       }
@@ -194,9 +206,18 @@ function startDataServer(): http.Server {
             });
             written++;
           }
+          // 被动端：对端来推，动作是「推送」——与对端主动推送那条日志字面相同
+          win?.webContents.send(LOG_CHANNEL, {
+            msg: `推送 ${table}：${written} 行`,
+            level: "ok",
+          });
           res.end(JSON.stringify({ ok: true, written }));
           console.log(`[sync] received table=${table} rows=${written}`);
         } catch (e) {
+          win?.webContents.send(LOG_CHANNEL, {
+            msg: `推送 ${table} 失败：${String(e)}`,
+            level: "error",
+          });
           res.statusCode = 500;
           res.end(JSON.stringify({ ok: false, error: String(e) }));
         }

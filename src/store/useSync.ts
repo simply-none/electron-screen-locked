@@ -47,6 +47,16 @@ export const useSync = defineStore("sync", () => {
     if (logs.value.length > 50) logs.value.pop();
   }
 
+  // 被动端同步日志：手机来拉（GET /export）或来推（POST /sync）时，主进程
+  // 通过 sync:log 上报，这里并入同一份列表 —— 两端因此看到相同的同步事件。
+  // 注意：不要用 removeAllListeners（会误杀其它模块的常驻监听，见 useCountdown）。
+  window.ipcRenderer.on(
+    "sync:log",
+    (_event, item: { msg: string; level?: SyncLogItem["level"] }) => {
+      log(item.msg, item.level ?? "info");
+    },
+  );
+
   /** 拉取本机状态（页面挂载时调用） */
   async function loadStatus() {
     try {
