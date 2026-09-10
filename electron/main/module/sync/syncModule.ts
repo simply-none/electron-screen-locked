@@ -62,10 +62,23 @@ const SYNCABLE_TABLES = new Set([
   "conversation_theme",
   "conversation",
   "conversation_tag",
+  // 电子书七表（2026-09-09 加入，主键见 tablePk）
+  "ebook_bookshelf",
+  "ebook_progress",
+  "ebook_bookmark",
+  "ebook_annotation",
+  "ebook_category",
+  "ebook_book_category",
+  "ebook_bg_image",
 ]);
 
 /** 按表主键映射：缺省 key（旧 SQL 层遗留）；主题对话三表为自增 id */
 function tablePk(table: string): string {
+  // 电子书：书架/进度以 file_path 为主键；书-分类是联合主键（ON CONFLICT 支持多列）；
+  // 其余电子书表为自增 id。
+  if (table === "ebook_bookshelf" || table === "ebook_progress") return "file_path";
+  if (table === "ebook_book_category") return "book_path, category_id";
+  if (table.startsWith("ebook")) return "id";
   return table.startsWith("conversation") ? "id" : "key";
 }
 

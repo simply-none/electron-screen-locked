@@ -29,6 +29,7 @@ import { initLocation } from "./module/location.ts";
 import { initBing } from "./module/bing.ts";
 import { initTTS } from "./module/tts.ts";
 import { initEbook } from "./module/ebook.ts";
+import { initEbookTransfer } from "./module/ebookTransfer.ts";
 import { initScreenshot } from "./module/screenshot.ts";
 import { initStock } from "./module/stock.ts";
 import { initSinaFinance } from "./module/sinaFinance.ts";
@@ -145,6 +146,8 @@ async function createWindow() {
   initTTS();
   // 电子书阅读模块
   await initEbook();
+  // 电子书跨端传书（/ebook/* 数据面路由，依赖同步模块的数据面注册接口）
+  initEbookTransfer();
   // 截图模块
   initScreenshot();
   // 股票查询模块（TickFlow，主进程查询，依赖数据库基础表）

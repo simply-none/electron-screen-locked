@@ -25,6 +25,14 @@ export const SYNC_TABLES = [
   "conversation_theme",
   "conversation",
   "conversation_tag",
+  // 电子书七表（2026-09-09 加入，与主进程 SYNCABLE_TABLES 保持一致）
+  "ebook_bookshelf",
+  "ebook_progress",
+  "ebook_bookmark",
+  "ebook_annotation",
+  "ebook_category",
+  "ebook_book_category",
+  "ebook_bg_image",
 ] as const;
 
 export const useSync = defineStore("sync", () => {
