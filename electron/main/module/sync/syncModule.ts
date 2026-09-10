@@ -201,9 +201,10 @@ function startDataServer(): http.Server {
       let body = "";
       req.on("data", (chunk) => (body += chunk));
       req.on("end", async () => {
+        let table: string | undefined;
         try {
           const payload = JSON.parse(body) as { table?: string; rows?: Record<string, unknown>[] };
-          const table = payload.table;
+          table = payload.table;
           if (!table || !SYNCABLE_TABLES.has(table)) {
             res.statusCode = 400;
             res.end(JSON.stringify({ ok: false, error: "table 不在白名单" }));

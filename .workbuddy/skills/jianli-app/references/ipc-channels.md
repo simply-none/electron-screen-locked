@@ -53,6 +53,7 @@
 - **系统 / 文件**：`get-fonts` / `get-default-file-path` / `open-file-by-default-app` / `get-installed-apps`；`start-scan` / `copy-files` / `copy-folder` / `rename-files`(+ `-reversed`) / `delete-files`（带 `-progress` 进度）
 - **TTS**：`tts:speak` / `tts:stop` / `tts:get-voices` / `tts:is-available` 及 `tts:system:*`
 - **电子书**：`ebook:*` 约 40 个（preload 封装，见 `preload/index.ts:54-389`）
+- **电子书传书（2026-09-10，不经 preload 封装，渲染端用 `window.ipcRenderer.handlePromise` 直连）**：`ebook:transfer-scan` / `ebook:transfer-list` / `ebook:transfer-download` / `ebook:transfer-upload`（主进程 `module/ebookTransfer.ts`；复用 47124 数据面 `/ebook/*`，与移动端对称，见 `modules/ebook-reader.md`「一键传书」）
 - **截图 / 贴纸**：`screenshot:*` / `sticker:*`
 - **股票**：`stock:*` 约 30 个（TickFlow，含缓存 / TTL / 自选）
 - **加密**：`encrypt-pwd` / `decrypt-pwd` / `compare-pwd`

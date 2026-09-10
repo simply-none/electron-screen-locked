@@ -19,6 +19,11 @@
               <LucideIcon name="FolderOpen" :size="16" />
               打开文件
             </el-button>
+            <!-- 一键传书按钮：与手机 App 书架「传书」对齐，多选后批量拉取/推送 epub、txt -->
+            <el-button @click="bookTransferVisible = true">
+              <LucideIcon name="ArrowLeftRight" :size="16" />
+              传书
+            </el-button>
             <!-- 当前文件名与格式徽标（仅阅读视图且已打开文件时显示） -->
             <div class="file-info" v-if="view === 'reader' && currentFile.format">
               <el-tag
@@ -350,6 +355,13 @@
 
       <!-- 更多阅读设置抽屉（主题/排版/标注/翻页交互/界面），已抽为独立组件 SettingsDrawer -->
       <SettingsDrawer v-model="settingsDrawerVisible" :current-file="currentFile" />
+
+      <!-- 一键传书弹窗（PC ↔ 手机）：扫描设备 → 选方向 → 勾选多本 → 批量传输，与移动端对齐 -->
+      <BookTransferDialog
+        v-model="bookTransferVisible"
+        :books="ebookStore.bookshelf"
+        @done="loadBookshelf"
+      />
       </div>
     </template>
   </layout-vue>
@@ -370,6 +382,7 @@ import SettingsDrawer from './components/SettingsDrawer.vue';
 import TocDrawer from './components/TocDrawer.vue';
 import AnnotationDrawer from './components/AnnotationDrawer.vue';
 import BookmarksDrawer from './components/BookmarksDrawer.vue';
+import BookTransferDialog from './components/BookTransferDialog.vue';
 import SearchPanel from './components/SearchPanel.vue';
 import Bookshelf from './components/Bookshelf.vue';
 import AttachmentsDrawer from './components/AttachmentsDrawer.vue';
@@ -545,6 +558,8 @@ const annotationDrawerTitle = computed(() => {
 
 /** 更多阅读设置抽屉显示状态 */
 const settingsDrawerVisible = ref(false);
+/** 一键传书弹窗可见性（工具栏「传书」按钮打开） */
+const bookTransferVisible = ref(false);
 
 /** 主题（预设）双向绑定：写入 store 并持久化 */
 
